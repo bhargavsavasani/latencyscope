@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the directory LatencyScope writes reports into is shared. Nothing else
+  in the app's storage is exposed through this provider.
+-->
+<paths>
+    <cache-path name="latencyscope_reports" path="latencyscope/" />
+</paths>

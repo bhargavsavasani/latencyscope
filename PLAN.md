@@ -362,6 +362,35 @@ still hold a `Placeholder.kt` (Phases 4-7), no CI and no publishing (Phase 10).
   `${applicationId}.latencyscope.fileprovider`, manifest-merged automatically.
 - **Done when:** golden-file tests for CSV, HTML renders a fixture session,
   escaping tests pass.
+- **✅ COMPLETE** — 42 tests. Notes:
+  - **Everything is rendered server-side in Kotlin**; the inline script only
+    adds sorting, filtering, tooltips and the theme toggle. The report is
+    complete and readable with scripting disabled, and there is one source of
+    truth per number instead of a Kotlin copy and a JavaScript copy.
+  - **Phases collapse to five buckets** in the stacked bar — Wait, Connect
+    (DNS+TCP+TLS), Request, Server, Response — on the first five categorical
+    colour slots, in chronological order. Nine series would exceed what any
+    validated categorical palette can separate; all nine raw values remain in
+    the call detail and in both CSVs.
+  - Palette validated with the data-viz validator in **both modes**: every
+    hard gate passes (worst adjacent CVD ΔE 9.1 light / 8.4 dark, normal
+    vision 19.6 / 19.3). Three light-mode hues sit below 3:1 contrast, so the
+    **relief rule** applies and the bar always ships direct numeric labels
+    plus the full route table.
+  - Latency status is never colour alone: the slow band carries a warning
+    glyph and the number is always present.
+  - JSON escapes `<`, `>` and `&` as `\u00xx`, plus U+2028/9. A recorded URL
+    containing a closing script tag therefore cannot break out of the
+    embedded data block — asserted by counting script elements in the output.
+  - CSV writes CRLF per RFC 4180, and an unmeasured byte count is a **blank
+    cell, not 0**, so a spreadsheet average is not dragged down by it.
+  - Files land in `cacheDir/latencyscope/<session>/` and share through a
+    library-local FileProvider authority (`${'$'}{applicationId}.latencyscope.fileprovider`),
+    so the consumer adds nothing to their manifest.
+  - `SampleReportWriterTest` writes a realistic 88-call report to
+    `build/reports/latencyscope-sample.html` for eyeballing in a browser.
+    Verified structurally: well-formed tags, waterfall bars inside the axis,
+    stacked segments summing to 100%, embedded JSON parses, 194 kB.
 
 ### Phase 6 — UI modules
 - `latencyscope-ui-compose`: `LatencyReportScreen(report)` — summary cards,

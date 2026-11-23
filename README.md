@@ -4,10 +4,9 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-4 complete: the `latencyscope-core` engine
-> and all four HTTP stacks (OkHttp/Retrofit, Ktor, Volley,
-> `HttpURLConnection`). The HTML/CSV reports and the debug UIs are still to
-> come.
+> **Status: pre-release.** Phases 0-5 complete: the `latencyscope-core`
+> engine, all four HTTP stacks, and the HTML/CSV/JSON exports. The in-app
+> debug UIs are still to come.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -26,7 +25,7 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 | `latencyscope-ktor` | ✅ Ktor client plugin (any engine) |
 | `latencyscope-volley` | ✅ Volley `BaseHttpStack` wrapper |
 | `latencyscope-urlconnection` | ✅ `HttpURLConnection` wrapper |
-| `latencyscope-export` | HTML / CSV / JSON report renderers |
+| `latencyscope-export` | ✅ HTML / CSV / JSON report renderers |
 | `latencyscope-ui-compose` | Compose debug report screen |
 | `latencyscope-ui-view` | View-based debug report screen |
 | `latencyscope-noop` | API-identical no-op for release builds |
@@ -91,6 +90,42 @@ connection.inputStream.use { ... }
 
 There is no global install hook on purpose: `URL.setURLStreamHandlerFactory`
 can be set only once per process and claiming it breaks OkHttp.
+
+## Getting the report out
+
+```kotlin
+val report = LatencyScope.report(LatencyScope.stop()) ?: return
+
+LatencyExport.share(context, report)      // write all four files, open the share sheet
+val files = LatencyExport.writeAll(context, report)
+val html = LatencyExport.toHtml(report)   // or render in memory
+```
+
+`writeAll` produces four files in `cacheDir/latencyscope/<session>/`:
+
+| File | What it is |
+|---|---|
+| `*.html` | The readable report — one self-contained file, no network requests |
+| `*-summary.csv` | One row per route: counts, percentiles, average phase times |
+| `*-calls.csv` | One row per call, every phase as its own column |
+| `*.json` | The whole report, machine-readable (same document embedded in the HTML) |
+
+Sharing goes through a FileProvider bundled with the library, so there is
+nothing to add to your manifest.
+
+### What the HTML report contains
+
+Summary tiles &middot; sortable, filterable route table with p50/p90/p95/p99
+&middot; stacked phase bars showing where each route's time actually goes
+&middot; a waterfall timeline with your `mark()` labels &middot; per-route
+latency histograms &middot; failures grouped by status or exception &middot;
+an expandable log of every call &middot; a methodology note explaining how
+each number was derived.
+
+It opens offline, works with JavaScript disabled, renders in light and dark,
+and prints. Unmeasurable phases are shown as absent, and slow latencies carry
+a glyph as well as a colour, so the report survives being printed in
+greyscale or read by a colour-blind reviewer.
 
 ## What each stack can see
 
