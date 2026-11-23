@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="latencyscope_title">Latency report</string>
+    <string name="latencyscope_share">Share</string>
+    <string name="latencyscope_tab_routes">Routes</string>
+    <string name="latencyscope_tab_calls">Calls</string>
+    <string name="latencyscope_tab_failures">Failures</string>
+    <string name="latencyscope_filter_hint">Filter</string>
+    <string name="latencyscope_empty_no_session">No session recorded yet. Call LatencyScope.start(), use the app, then stop the session to see a report here.</string>
+    <string name="latencyscope_empty_filter">Nothing matches this filter.</string>
+</resources>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="latencyscope_series_1">#FF3987E5</color>
+    <color name="latencyscope_series_2">#FFD95926</color>
+    <color name="latencyscope_series_3">#FF199E70</color>
+    <color name="latencyscope_series_4">#FFC98500</color>
+    <color name="latencyscope_series_5">#FFD55181</color>
+
+    <color name="latencyscope_fast">#FF0CA30C</color>
+    <color name="latencyscope_warn">#FFFAB219</color>
+    <color name="latencyscope_slow">#FFE66767</color>
+
+    <color name="latencyscope_surface">#FF1A1A19</color>
+    <color name="latencyscope_surface_alt">#FF232321</color>
+    <color name="latencyscope_track">#FF2C2C2A</color>
+    <color name="latencyscope_border">#FF383835</color>
+    <color name="latencyscope_text_primary">#FFFFFFFF</color>
+    <color name="latencyscope_text_secondary">#FFC3C2B7</color>
+</resources>

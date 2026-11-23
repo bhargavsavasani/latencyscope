@@ -1,2 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          Not exported: a latency report can contain internal hostnames and
+          route shapes, so only the app itself may open it.
+        -->
+        <activity
+            android:name=".LatencyReportActivity"
+            android:exported="false"
+            android:label="Latency report" />
+    </application>
+
+</manifest>

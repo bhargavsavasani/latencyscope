@@ -18,13 +18,9 @@ import java.util.Locale
  */
 internal object HtmlReportRenderer {
 
-    /** The five stacked phases, in chronological order, on fixed colour slots. */
-    private val PHASE_BUCKETS = listOf(
-        PhaseBucket("Wait", "--series-1", "Queued before any work started — connection pool or dispatcher backlog."),
-        PhaseBucket("Connect", "--series-2", "DNS, TCP handshake and TLS. Absent on a reused connection."),
-        PhaseBucket("Request", "--series-3", "Sending request headers and body."),
-        PhaseBucket("Server", "--series-4", "Request fully sent, waiting for the first response byte — backend think time."),
-        PhaseBucket("Response", "--series-5", "Receiving response headers and body."),
+    /** Fixed colour order; slot indexes come from [PhaseBreakdown]. */
+    private val PHASE_COLOR_VARS = listOf(
+        "--series-1", "--series-2", "--series-3", "--series-4", "--series-5",
     )
 
     private const val MAX_WATERFALL_ROWS = 400
@@ -233,11 +229,12 @@ internal object HtmlReportRenderer {
         append(esc(formatMs(ms))).append("</td>")
     }
 
-    private fun latencyClass(report: LatencyReport, ms: Long): String = when {
-        ms >= report.slowThresholdMs -> "lat-slow"
-        ms >= report.warnThresholdMs -> "lat-warn"
-        else -> "lat-good"
-    }
+    private fun latencyClass(report: LatencyReport, ms: Long): String =
+        when (LatencyFormat.band(report, ms)) {
+            LatencyBand.SLOW -> "lat-slow"
+            LatencyBand.WARN -> "lat-warn"
+            LatencyBand.FAST -> "lat-good"
+        }
 
     // ----------------------------------------------------------- phase bars
 
@@ -255,18 +252,18 @@ internal object HtmlReportRenderer {
         append("Segments are drawn to scale against the slowest route.</p>\n")
 
         append("<ul class=\"legend\">\n")
-        PHASE_BUCKETS.forEach { bucket ->
-            append("<li tabindex=\"0\" data-tip=\"<b>").append(esc(bucket.label)).append("</b><br>")
-                .append(esc(bucket.description)).append("\">")
-            append("<i class=\"swatch\" style=\"background:var(").append(bucket.colorVar).append(")\"></i>")
-            append(esc(bucket.label)).append("</li>\n")
+        PhaseBreakdown.of(Phases.EMPTY).forEach { slice ->
+            append("<li tabindex=\"0\" data-tip=\"<b>").append(esc(slice.label)).append("</b><br>")
+                .append(esc(slice.description)).append("\">")
+            append("<i class=\"swatch\" style=\"background:var(").append(colorVar(slice.slot)).append(")\"></i>")
+            append(esc(slice.label)).append("</li>\n")
         }
         append("</ul>\n")
 
         val rows = report.routes
             .filter { route -> !route.stats.phaseAverages.isEmpty }
-            .sortedByDescending { bucketsOf(it.stats.phaseAverages).sum() }
-        val scale = rows.maxOfOrNull { bucketsOf(it.stats.phaseAverages).sum() } ?: 0L
+            .sortedByDescending { PhaseBreakdown.total(it.stats.phaseAverages) }
+        val scale = rows.maxOfOrNull { PhaseBreakdown.total(it.stats.phaseAverages) } ?: 0L
 
         append("<div class=\"table-scroll\">\n")
         rows.forEach { route -> appendPhaseRow(route, scale) }
@@ -274,8 +271,8 @@ internal object HtmlReportRenderer {
     }
 
     private fun StringBuilder.appendPhaseRow(route: RouteStats, scale: Long) {
-        val values = bucketsOf(route.stats.phaseAverages)
-        val accounted = values.sum()
+        val slices = PhaseBreakdown.nonEmpty(route.stats.phaseAverages)
+        val accounted = slices.sumOf { it.ms }
         if (accounted <= 0L) return
 
         append("<div class=\"phase-row\">\n")
@@ -283,41 +280,30 @@ internal object HtmlReportRenderer {
         append("<span class=\"total\">").append(esc(formatMs(accounted))).append(" avg &middot; ")
             .append(route.stats.count).append(" calls</span></div>\n")
 
-        // Each route's bar is a share of the widest route, so the rows are
+        // Each route's bar is a share of the widest route, so rows are
         // comparable to each other rather than each filling its own width.
         val widthPercent = if (scale <= 0) 0.0 else accounted.toDouble() / scale * 100.0
         append("<div class=\"stack\" style=\"width:").append(percent(widthPercent)).append("\">")
-        PHASE_BUCKETS.forEachIndexed { index, bucket ->
-            val value = values[index]
-            if (value <= 0L) return@forEachIndexed
-            val share = value.toDouble() / accounted * 100.0
-            append("<span style=\"width:").append(percent(share))
-            append(";background:var(").append(bucket.colorVar).append(")\" data-tip=\"<b>")
-            append(esc(bucket.label)).append("</b> ").append(esc(formatMs(value)))
-            append(" &middot; ").append(esc(formatPercent(value.toDouble() / accounted)))
-            append(" of this route<br>").append(esc(bucket.description)).append("\"></span>")
+        slices.forEach { slice ->
+            append("<span style=\"width:").append(percent(slice.share(accounted) * 100.0))
+            append(";background:var(").append(colorVar(slice.slot)).append(")\" data-tip=\"<b>")
+            append(esc(slice.label)).append("</b> ").append(esc(formatMs(slice.ms)))
+            append(" &middot; ").append(esc(formatPercent(slice.share(accounted))))
+            append(" of this route<br>").append(esc(slice.description)).append("\"></span>")
         }
         append("</div>\n")
 
-        // Direct labels: the three light-mode hues sit below 3:1 on the light
-        // surface, so the numbers are always on the page, never colour-only.
+        // Direct labels: three of the five hues sit below 3:1 contrast on the
+        // light surface, so the numbers are always on the page, never colour-only.
         append("<div class=\"phase-values\">")
-        PHASE_BUCKETS.forEachIndexed { index, bucket ->
-            val value = values[index]
-            if (value <= 0L) return@forEachIndexed
-            append("<span><i style=\"background:var(").append(bucket.colorVar).append(")\"></i>")
-            append(esc(bucket.label)).append(' ').append(esc(formatMs(value))).append("</span>")
+        slices.forEach { slice ->
+            append("<span><i style=\"background:var(").append(colorVar(slice.slot)).append(")\"></i>")
+            append(esc(slice.label)).append(' ').append(esc(formatMs(slice.ms))).append("</span>")
         }
         append("</div>\n</div>\n")
     }
 
-    private fun bucketsOf(phases: Phases): List<Long> = listOf(
-        phases.queueMs ?: 0L,
-        (phases.dnsMs ?: 0L) + (phases.connectMs ?: 0L) + (phases.tlsMs ?: 0L),
-        (phases.requestHeadersMs ?: 0L) + (phases.requestBodyMs ?: 0L),
-        phases.serverMs ?: 0L,
-        (phases.responseHeadersMs ?: 0L) + (phases.responseBodyMs ?: 0L),
-    )
+    private fun colorVar(slot: Int): String = PHASE_COLOR_VARS[slot % PHASE_COLOR_VARS.size]
 
     // -------------------------------------------------------------- timeline
 
@@ -551,12 +537,6 @@ internal object HtmlReportRenderer {
 
     // ----------------------------------------------------------------- utils
 
-    private data class PhaseBucket(
-        val label: String,
-        val colorVar: String,
-        val description: String,
-    )
-
     private fun reportTitle(report: LatencyReport): String =
         "Latency report — " + report.session.name
 
@@ -580,29 +560,13 @@ internal object HtmlReportRenderer {
     /** Tooltips hold small HTML snippets, so their *content* is escaped first. */
     private fun escForAttribute(value: String): String = esc(value)
 
-    internal fun formatMs(ms: Long): String = when {
-        ms < 0 -> "-" + formatMs(-ms)
-        ms < MILLIS_PER_SECOND -> "$ms ms"
-        ms < MILLIS_PER_MINUTE -> trimZero(ms / MILLIS_PER_SECOND.toDouble()) + " s"
-        else -> (ms / MILLIS_PER_MINUTE).toString() + "m " +
-            ((ms % MILLIS_PER_MINUTE) / MILLIS_PER_SECOND) + "s"
-    }
+    internal fun formatMs(ms: Long): String = LatencyFormat.duration(ms)
 
-    internal fun formatBytes(bytes: Long): String = when {
-        bytes <= 0 -> "0 B"
-        bytes < BYTES_PER_KB -> "$bytes B"
-        bytes < BYTES_PER_MB -> trimZero(bytes / BYTES_PER_KB.toDouble()) + " kB"
-        else -> trimZero(bytes / BYTES_PER_MB.toDouble()) + " MB"
-    }
+    internal fun formatBytes(bytes: Long): String = LatencyFormat.bytes(bytes)
 
-    private fun formatBytesOrUnknown(bytes: Long): String =
-        if (bytes < 0) "not reported by this stack" else formatBytes(bytes)
+    private fun formatBytesOrUnknown(bytes: Long): String = LatencyFormat.bytesOrUnknown(bytes)
 
-    internal fun formatPercent(ratio: Double): String {
-        if (ratio <= 0.0) return "0%"
-        val percent = ratio * 100
-        return if (percent < 1) "<1%" else trimZero(percent) + "%"
-    }
+    internal fun formatPercent(ratio: Double): String = LatencyFormat.percent(ratio)
 
     private fun percent(value: Double): String = trimZero(value.coerceIn(0.0, 100.0)) + "%"
 
@@ -625,8 +589,4 @@ internal object HtmlReportRenderer {
     private const val MIN_BAR_PERCENT = 0.4
     private const val MIN_HISTOGRAM_CALLS = 5
     private const val ESCAPE_HEADROOM = 16
-    private const val MILLIS_PER_SECOND = 1_000L
-    private const val MILLIS_PER_MINUTE = 60_000L
-    private const val BYTES_PER_KB = 1_024L
-    private const val BYTES_PER_MB = 1_048_576L
 }

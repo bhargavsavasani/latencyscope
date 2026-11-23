@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The same validated palette the HTML report and the Compose UI use. The
+  night variant is selected for a dark surface, not an inversion of these.
+-->
+<resources>
+    <color name="latencyscope_series_1">#FF2A78D6</color>
+    <color name="latencyscope_series_2">#FFEB6834</color>
+    <color name="latencyscope_series_3">#FF1BAF7A</color>
+    <color name="latencyscope_series_4">#FFEDA100</color>
+    <color name="latencyscope_series_5">#FFE87BA4</color>
+
+    <color name="latencyscope_fast">#FF006300</color>
+    <color name="latencyscope_warn">#FF8A5A00</color>
+    <color name="latencyscope_slow">#FFA52222</color>
+
+    <color name="latencyscope_surface">#FFFCFCFB</color>
+    <color name="latencyscope_surface_alt">#FFEFEEEA</color>
+    <color name="latencyscope_track">#FFE6E5E0</color>
+    <color name="latencyscope_border">#FFDCDBD5</color>
+    <color name="latencyscope_text_primary">#FF0B0B0B</color>
+    <color name="latencyscope_text_secondary">#FF52514E</color>
+</resources>

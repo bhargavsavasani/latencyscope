@@ -4,9 +4,10 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-5 complete: the `latencyscope-core`
-> engine, all four HTTP stacks, and the HTML/CSV/JSON exports. The in-app
-> debug UIs are still to come.
+> **Status: pre-release.** Phases 0-6 complete: the `latencyscope-core`
+> engine, all four HTTP stacks, the HTML/CSV/JSON exports and both in-app
+> debug UIs. Remaining: the no-op release artifact, the sample app, hardening
+> and publishing.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -26,8 +27,8 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 | `latencyscope-volley` | ✅ Volley `BaseHttpStack` wrapper |
 | `latencyscope-urlconnection` | ✅ `HttpURLConnection` wrapper |
 | `latencyscope-export` | ✅ HTML / CSV / JSON report renderers |
-| `latencyscope-ui-compose` | Compose debug report screen |
-| `latencyscope-ui-view` | View-based debug report screen |
+| `latencyscope-ui-compose` | ✅ Compose debug report screen |
+| `latencyscope-ui-view` | ✅ View-based debug report screen |
 | `latencyscope-noop` | API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
 
@@ -126,6 +127,33 @@ It opens offline, works with JavaScript disabled, renders in light and dark,
 and prints. Unmeasurable phases are shown as absent, and slow latencies carry
 a glyph as well as a colour, so the report survives being printed in
 greyscale or read by a colour-blind reviewer.
+
+## Looking at the report in the app
+
+Compose:
+
+```kotlin
+val report = LatencyScope.report()
+if (report != null) {
+    LatencyReportScreen(report, onShare = { LatencyExport.share(context, report) })
+}
+// or the ready-made screen:
+startActivity(io.github.latencyscope.ui.compose.LatencyReportActivity.intent(context))
+```
+
+Views:
+
+```kotlin
+startActivity(io.github.latencyscope.ui.view.LatencyReportActivity.intent(context))
+// or embed it anywhere:
+reportView.setReport(report)
+reportView.onShare = { LatencyExport.share(context, report) }
+```
+
+Both show the same thing — summary, routes, calls and failures with a filter,
+expandable detail and the phase breakdown — and both render in light and dark.
+Slow latencies carry a `!` and an accessibility label as well as a colour, so
+the warning survives a greyscale screenshot or a colour-blind reader.
 
 ## What each stack can see
 

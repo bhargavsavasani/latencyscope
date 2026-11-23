@@ -403,7 +403,31 @@ still hold a `Placeholder.kt` (Phases 4-7), no CI and no publishing (Phase 10).
   facade documents both explicit launchers).
 - Optional notification shown while recording (debug only) with stop + share
   actions.
-- **Done when:** sample renders both UIs.
+- **Done when:** both UIs render a report and are covered by tests.
+- **✅ COMPLETE** — 32 tests (10 Compose, 22 View). Notes:
+  - A shared `LatencyFormat` / `PhaseBreakdown` was extracted into
+    `latencyscope-export` first, so a duration cannot read as `1.5 s` in the
+    HTML and `1500 ms` in the UI. The HTML renderer now delegates to it.
+  - **Compose needs the Compose compiler plugin even under AGP 9's built-in
+    Kotlin** — `buildFeatures.compose = true` alone fails with "the Compose
+    Compiler Gradle plugin is required". Applying
+    `org.jetbrains.kotlin.plugin.compose` works and, unlike `kotlin-android`,
+    does not clash with the built-in `kotlin` extension.
+  - The View module uses `resourcePrefix = "latencyscope_"` and a `merge`
+    root, so it adds no nesting and cannot collide with consumer resources.
+  - `ListAdapter` diffs **inline** rather than on a background thread. Rows
+    are a few thousand pre-computed strings, and an inline diff keeps the list
+    in step with the filter being typed instead of lagging a frame behind.
+  - Compose tests run under Robolectric with a tall window qualifier
+    (`w480dp-h2400dp`); the default screen is too short for a `LazyColumn` to
+    compose the rows below the summary tiles, which looks exactly like a
+    missing row.
+  - Accessibility carried through both UIs: the slow band is prefixed with
+    `!`, every latency has a content description naming its band, and phase
+    segments are labelled with name and duration — three of the five hues sit
+    below 3:1 contrast on a light surface.
+  - Both report activities are `exported="false"`: a report carries internal
+    hostnames and route shapes.
 
 ### Phase 7 — `latencyscope-noop`
 - Mirror every public class/function; bodies empty, returning benign defaults.
