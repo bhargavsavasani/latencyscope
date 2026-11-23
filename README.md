@@ -4,7 +4,9 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phase 0 (project scaffolding) is complete.
+> **Status: pre-release.** Phases 0-1 complete: project scaffolding and the
+> `latencyscope-core` engine (recording, route normalization, redaction,
+> aggregation). No HTTP stack is instrumented yet — that is Phase 2 onward.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -18,7 +20,7 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 
 | Module | Purpose |
 |---|---|
-| `latencyscope-core` | Models, recorder, route normalization, aggregation |
+| `latencyscope-core` | ✅ Models, recorder, route normalization, redaction, aggregation |
 | `latencyscope-okhttp` | OkHttp / Retrofit instrumentation (full phase breakdown) |
 | `latencyscope-ktor` | Ktor client plugin (any engine) |
 | `latencyscope-volley` | Volley `BaseHttpStack` wrapper |

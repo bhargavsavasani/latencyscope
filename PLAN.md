@@ -206,7 +206,19 @@ object LatencyExport {
 - **Tests:** normalizer table-driven, percentile math vs known fixtures,
   ring-buffer overflow + drop count, redaction, concurrent append (stress 8
   threads × 10k records, assert no loss beyond cap and no exception).
-- **Done when:** core unit tests green, `apiDump` committed.
+- **Done when:** core unit tests green.
+- **✅ COMPLETE** — 57 unit tests across 6 suites, all green.
+  Deviations from the sketch above, all deliberate:
+  - Facade object is `LatencyScope` (not `Latencyscope`).
+  - Instrumentation modules submit a `RawCall`; core owns redaction, route
+    normalization, host parsing and id assignment, so all four stacks produce
+    identical records and the logic is unit-tested once.
+  - `Clock` interface injected (`setClockForTesting`) — durations use
+    `SystemClock.elapsedRealtime`, never wall-clock, which jumps mid-session.
+  - `persist` dropped from `LatencyConfig` until the Room module actually
+    exists; a config flag that does nothing is worse than no flag.
+  - `UrlParts` uses `java.net.URI`, not `android.net.Uri`, so URL handling is
+    covered by JVM unit tests.
 
 ### Phase 2 — `latencyscope-okhttp`
 - `LatencyEventListener : okhttp3.EventListener` capturing every callback
