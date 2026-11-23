@@ -234,6 +234,22 @@ object LatencyExport {
   connection reuse (no DNS/TLS events), cancellation, h2 multiplexing,
   WebSocket calls excluded, cached responses.
 - **Done when:** MockWebServer tests assert phase values within tolerance.
+- **✅ COMPLETE** — 14 MockWebServer tests, green on three consecutive runs.
+  Deviations from the sketch above, all deliberate:
+  - **No interceptor.** `EventListener` already exposes status
+    (`responseHeadersEnd`), byte counts (`requestBodyEnd`/`responseBodyEnd`),
+    protocol, and cache outcome (`cacheHit`/`cacheConditionalHit`). Adding an
+    interceptor would duplicate all of it and create a second place for the
+    two to disagree. Retry depth comes from counting `requestHeadersStart`
+    callbacks, which also covers route retries that `priorResponse` misses.
+  - **No identity map.** OkHttp builds a fresh `EventListener` per call via the
+    factory, so per-call state lives in fields. The leak risk the plan worried
+    about cannot occur: there is no map entry for a cancelled call to strand.
+  - `connectMs` has TLS subtracted out, since OkHttp's connect span contains
+    the handshake — leaving it in would double-count in the stacked bar.
+  - Redirect/retry phases are **summed** across exchanges within one call, and
+    the record keeps the final status, so one caller-visible call is one row
+    that still accounts for every hop's cost.
 
 ### Phase 3 — `latencyscope-ktor`
 - `ClientPlugin("Latencyscope")` hooking `SendPipeline.Before` /

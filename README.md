@@ -4,9 +4,9 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-1 complete: project scaffolding and the
-> `latencyscope-core` engine (recording, route normalization, redaction,
-> aggregation). No HTTP stack is instrumented yet — that is Phase 2 onward.
+> **Status: pre-release.** Phases 0-2 complete: the `latencyscope-core` engine
+> and OkHttp/Retrofit instrumentation. Ktor, Volley and `HttpURLConnection`
+> support, the HTML/CSV reports and the debug UIs are still to come.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -21,7 +21,7 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 | Module | Purpose |
 |---|---|
 | `latencyscope-core` | ✅ Models, recorder, route normalization, redaction, aggregation |
-| `latencyscope-okhttp` | OkHttp / Retrofit instrumentation (full phase breakdown) |
+| `latencyscope-okhttp` | ✅ OkHttp / Retrofit instrumentation (full phase breakdown) |
 | `latencyscope-ktor` | Ktor client plugin (any engine) |
 | `latencyscope-volley` | Volley `BaseHttpStack` wrapper |
 | `latencyscope-urlconnection` | `HttpURLConnection` wrapper |
@@ -30,6 +30,26 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 | `latencyscope-ui-view` | View-based debug report screen |
 | `latencyscope-noop` | API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
+
+## Usage today (OkHttp)
+
+```kotlin
+// once, in Application.onCreate
+LatencyScope.init(this)
+
+val client = OkHttpClient.Builder()
+    .installLatencyScope()          // pass your existing EventListener.Factory
+    .build()                        // if you have one: .installLatencyScope(mine)
+
+// around the flow you care about
+LatencyScope.start("checkout")
+LatencyScope.mark("cart opened")
+// ... use the app ...
+val report = LatencyScope.report(LatencyScope.stop())
+```
+
+Leaving the instrumentation installed in release builds is safe: with no
+session recording, each callback performs one volatile read and returns.
 
 ## Build
 
