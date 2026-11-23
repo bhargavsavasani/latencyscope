@@ -3,6 +3,10 @@ import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.tasks.testing.Test
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
+import java.time.Duration
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.getByType
@@ -60,6 +64,22 @@ class LatencyscopeAndroidLibraryPlugin : Plugin<Project> {
             }
         }
 
+        // Run unit tests on a pinned JDK rather than whatever launched the
+        // daemon. Bytecode tooling in the test path (Robolectric's ASM) cannot
+        // read class files newer than it knows about, and a developer on a
+        // newer JDK should not get a different test result from CI.
+        val toolchains = extensions.getByType<JavaToolchainService>()
+        tasks.withType(Test::class.java).configureEach {
+            javaLauncher.set(
+                toolchains.launcherFor {
+                    languageVersion.set(JavaLanguageVersion.of(TEST_JDK))
+                },
+            )
+            // These tests open real sockets. A wrapper bug that strands one
+            // should fail the build, not hang it until CI's own timeout.
+            timeout.set(Duration.ofMinutes(TEST_TIMEOUT_MINUTES))
+        }
+
         dependencies {
             add("testImplementation", libs.findLibrary("junit").get())
             add("androidTestImplementation", libs.findLibrary("androidx-junit").get())
@@ -69,5 +89,7 @@ class LatencyscopeAndroidLibraryPlugin : Plugin<Project> {
     private companion object {
         const val COMPILE_SDK = 37
         const val MIN_SDK = 21
+        const val TEST_JDK = 17
+        const val TEST_TIMEOUT_MINUTES = 10L
     }
 }

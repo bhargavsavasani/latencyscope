@@ -310,7 +310,28 @@ still hold a `Placeholder.kt` (Phases 4-7), no CI and no publishing (Phase 10).
 - URLConnection: `Latencyscope.wrap(connection)` returning a delegating
   `HttpURLConnection` that times connect / first-byte / stream drain; counts
   bytes via wrapped streams. Documented explicitly as lower-fidelity.
-- **Done when:** instrumented tests against MockWebServer for both.
+- **Done when:** tests against MockWebServer for both.
+- **✅ COMPLETE** — 22 tests (10 Volley, 12 `HttpURLConnection`), all green as
+  JVM unit tests rather than instrumented ones. Notes:
+  - Volley tests run under **Robolectric**: `Request`'s constructor calls
+    `android.net.Uri` and `TextUtils`, which stubbed defaults cannot satisfy.
+    Pinned to `sdk = [34]` (Robolectric 4.14 ships no SDK 37 runtime) and the
+    deprecated `HttpStack` interface drags in `org.apache.http` signatures, so
+    httpclient is on the test classpath.
+  - **Unit tests now run on a pinned JDK 17 toolchain.** The Gradle daemon
+    here starts on JDK 25 and Robolectric's bytecode reader rejects class file
+    major version 69. Pinning also stops a developer's JDK from changing the
+    result relative to CI.
+  - Test tasks get a 10-minute Gradle timeout and the connection tests a
+    30-second JUnit `Timeout` rule, after a wrapper test hung the build.
+  - Volley records **each retry attempt separately**, because Volley retries
+    above the stack. Collapsing them would hide a retry storm, which is
+    exactly what the report should expose.
+  - `HttpURLConnection` records once, at whichever comes first: body fully
+    read, stream closed, `disconnect()`, or failure. Phases are limited to
+    connect / server / response-body — the API exposes nothing below the
+    socket.
+  - No global `URL.setURLStreamHandlerFactory` hook, as decided in Phase 0.
 
 ### Phase 5 — `latencyscope-export`
 - `CsvWriter` — RFC-4180 escaping. Two files: `calls.csv`, `summary.csv`.

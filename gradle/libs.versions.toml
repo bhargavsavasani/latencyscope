@@ -14,6 +14,9 @@ material = "1.14.0"
 okhttp = "4.12.0"
 ktor = "3.2.0"
 coroutines = "1.10.2"
+volley = "1.2.1"
+robolectric = "4.14.1"
+apacheHttpClient = "4.5.14"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -28,6 +31,9 @@ ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref =
 ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
 ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+volley = { group = "com.android.volley", name = "volley", version.ref = "volley" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+apache-httpclient = { group = "org.apache.httpcomponents", name = "httpclient", version.ref = "apacheHttpClient" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 # Used only by build-logic convention plugins
