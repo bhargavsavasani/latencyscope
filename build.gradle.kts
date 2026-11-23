@@ -1,0 +1,5 @@
+// Top-level build file. Shared module configuration lives in build-logic/.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+}
