@@ -1,12 +1,16 @@
+# Library modules take OkHttp and Ktor as compileOnly, so these versions are
+# the *minimum* supported, not the latest: compiling against the oldest API we
+# promise to work with is what keeps a consumer on OkHttp 4 or Ktor 3.2 from
+# hitting a NoSuchMethodError. Bump them only to raise that floor deliberately.
 [versions]
 agp = "9.5.2"
 kotlin = "2.2.10"
-coreKtx = "1.10.1"
+coreKtx = "1.19.1"
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
-appcompat = "1.6.1"
-material = "1.10.0"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+appcompat = "1.8.0"
+material = "1.14.0"
 okhttp = "4.12.0"
 ktor = "3.2.0"
 coroutines = "1.10.2"

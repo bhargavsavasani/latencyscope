@@ -34,10 +34,12 @@ public class RecordStore(
         // Trim in a loop: concurrent adds can briefly overshoot the cap.
         var over = count.incrementAndGet() - maxRecords
         while (over > 0) {
-            if (queue.poll() != null) {
-                count.decrementAndGet()
-                dropped.incrementAndGet()
-            }
+            // A null poll means a concurrent trim already drained it. Keep
+            // looping only while we are actually removing something, or two
+            // threads can spin against each other forever.
+            if (queue.poll() == null) break
+            count.decrementAndGet()
+            dropped.incrementAndGet()
             over = count.get() - maxRecords
         }
     }

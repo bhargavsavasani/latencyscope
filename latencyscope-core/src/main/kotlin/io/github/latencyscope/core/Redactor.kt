@@ -64,16 +64,13 @@ public class Redactor(
         return length
     }
 
-    /** Header values are only kept when the consumer allow-listed the name. */
-    public fun redactHeader(name: String, value: String, allowed: Set<String>): String {
-        val lower = name.lowercase()
-        if (lower in ALWAYS_SENSITIVE_HEADERS) return MASK
-        return if (lower in allowed) value else MASK
-    }
-
     public companion object {
         public const val MASK: String = "***"
 
+        /**
+         * Reserved for header capture, which no module records yet. Kept here
+         * so the list is reviewed in one place when Phase 5 adds it.
+         */
         public val ALWAYS_SENSITIVE_HEADERS: Set<String> = setOf(
             "authorization",
             "proxy-authorization",

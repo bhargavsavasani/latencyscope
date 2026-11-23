@@ -5,6 +5,7 @@ import io.github.latencyscope.core.Phases
 import io.github.latencyscope.core.RawCall
 import io.github.latencyscope.core.Source
 import io.github.latencyscope.core.describe
+import io.ktor.client.plugins.api.ClientPlugin
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.request.HttpRequestBuilder
@@ -55,7 +56,7 @@ public class LatencyScopeKtorConfig {
  * For a full breakdown on Android, run Ktor on the OkHttp engine, install
  * `latencyscope-okhttp` on that engine's client, and set [deferToEngine].
  */
-public val LatencyScopeKtorPlugin: io.ktor.client.plugins.api.ClientPlugin<LatencyScopeKtorConfig> =
+public val LatencyScopeKtorPlugin: ClientPlugin<LatencyScopeKtorConfig> =
     createClientPlugin("LatencyScope", ::LatencyScopeKtorConfig) {
         val deferToEngine = pluginConfig.deferToEngine
 

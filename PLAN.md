@@ -275,6 +275,35 @@ object LatencyExport {
   - Response size comes from `Content-Length`; reading the body to measure it
     would consume the stream before the caller sees it.
 
+### Audit of Phases 0-3 (done before Phase 4)
+
+`./gradlew clean assembleDebug testDebugUnitTest lintDebug` — 85 unit tests
+green, **0 lint errors** across all 10 modules. Seven issues found and fixed:
+
+| # | Issue | Fix |
+|---|---|---|
+| 1 | Lint `MissingPermission` ×3 in `NetworkTypeProvider` | Runtime gate was already there but invisible to lint; annotated `@SuppressLint` with the reason |
+| 2 | `RecordStore.add` could spin forever — two threads trimming, one polls null while `count` is transiently inflated | Break out of the trim loop on a null poll |
+| 3 | OkHttp listener fields not `@Volatile`; async calls hand events between caller and dispatcher threads | All mutable fields `@Volatile`, terminal write guarded by `AtomicBoolean`; new `AsyncCallTest` covers 16 enqueued calls |
+| 4 | `finished` flag was a plain `Boolean` — a cancel delivers both `canceled` and `callFailed` | `AtomicBoolean.compareAndSet` |
+| 5 | `LatencyConfig.capturedHeaders` and `Redactor.redactHeader` were dead — nothing records headers | Removed until Phase 5 adds a header field to `ApiCallRecord`; same rule already applied to `persist` |
+| 6 | `clear()` also wiped `lastSession`, which the KDoc did not say | KDoc corrected to match behaviour |
+| 7 | Stale androidx versions in the catalog | Bumped core-ktx, appcompat, material, test-ext, espresso |
+
+Deliberately **not** changed:
+- **OkHttp stays at 4.12.0 and Ktor at 3.2.0** in the catalog. Both are
+  `compileOnly`, so these are the *minimum supported* versions, not the
+  latest. Compiling against the oldest API we promise to support is what stops
+  a consumer still on OkHttp 4 from hitting `NoSuchMethodError`.
+- **Gradle 9.6.0** — the 9.9.2 nudge is informational; upgrading the wrapper
+  mid-phase buys nothing.
+- `setClockForTesting` / `initForTesting` remain public. They are named for
+  what they are, and hiding them behind `@VisibleForTesting` would pull
+  `androidx.annotation` into every consumer of the core module.
+
+Known gaps, all scheduled: `:sample` has no UI yet (Phase 8), six modules
+still hold a `Placeholder.kt` (Phases 4-7), no CI and no publishing (Phase 10).
+
 ### Phase 4 — `latencyscope-volley` + `latencyscope-urlconnection`
 - Volley: `LatencyHttpStack(delegate: BaseHttpStack)` timing `executeRequest`,
   plus `LatencyRequestQueue.create(context)` convenience.

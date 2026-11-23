@@ -61,12 +61,4 @@ class RedactorTest {
         assertEquals("https://x.com/a?flag", strict.redactUrl("https://x.com/a?flag"))
         assertEquals("https://x.com/a", strict.redactUrl("https://x.com/a?"))
     }
-
-    @Test
-    fun alwaysMasksSensitiveHeadersEvenWhenAllowListed() {
-        val allowed = setOf("authorization", "x-request-id")
-        assertEquals("***", strict.redactHeader("Authorization", "Bearer abc", allowed))
-        assertEquals("req-9", strict.redactHeader("X-Request-Id", "req-9", allowed))
-        assertEquals("***", strict.redactHeader("X-Custom", "value", allowed))
-    }
 }

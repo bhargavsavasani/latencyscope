@@ -1,6 +1,7 @@
 package io.github.latencyscope.core
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -38,6 +39,10 @@ internal class NetworkTypeProvider(context: Context) {
         return runCatching { readNetworkType(cm) }.getOrNull()
     }
 
+    // Lint cannot see that [hasPermission] already gated this: the manager is
+    // null unless ACCESS_NETWORK_STATE was granted, so these calls are only
+    // reachable with the permission held.
+    @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")
     private fun readNetworkType(cm: ConnectivityManager): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

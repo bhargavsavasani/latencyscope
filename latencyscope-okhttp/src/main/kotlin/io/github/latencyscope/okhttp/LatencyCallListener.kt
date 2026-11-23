@@ -6,6 +6,7 @@ import io.github.latencyscope.core.RawCall
 import io.github.latencyscope.core.Source
 import io.github.latencyscope.core.describe
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -32,6 +33,14 @@ import okhttp3.Response
  * [exchangeCount] records how many happened, so a 3-hop redirect chain reports
  * its real total cost instead of only the last hop.
  *
+ * ### Threading
+ * OkHttp delivers a call's events from more than one thread — the caller's
+ * thread for `callStart`, a dispatcher or connection thread for the rest —
+ * though never two at once for the same call. Fields are therefore `@Volatile`
+ * for visibility across that handoff, and the terminal write is guarded by an
+ * [AtomicBoolean] so a cancel that produces both `canceled` and `callFailed`
+ * cannot emit two records.
+ *
  * ### Timing source
  * Durations come from [System.nanoTime] — monotonic, unaffected by clock
  * changes, and available without an Android dependency so the whole class is
@@ -42,42 +51,43 @@ public class LatencyCallListener internal constructor(
     private val delegate: EventListener?,
 ) : EventListener() {
 
-    private var startedAtEpochMs: Long = 0
-    private var startedAtElapsedMs: Long = 0
-    private var callStartNanos: Long = 0
+    @Volatile private var startedAtEpochMs: Long = 0
+    @Volatile private var startedAtElapsedMs: Long = 0
+    @Volatile private var callStartNanos: Long = 0
 
-    private var url: String? = null
-    private var method: String = "GET"
-    private var statusCode: Int? = null
-    private var protocol: String? = null
-    private var fromCache: Boolean = false
-    private var threadName: String? = null
-    private var finished: Boolean = false
+    @Volatile private var url: String? = null
+    @Volatile private var method: String = "GET"
+    @Volatile private var statusCode: Int? = null
+    @Volatile private var protocol: String? = null
+    @Volatile private var fromCache: Boolean = false
+    @Volatile private var threadName: String? = null
+
+    private val finished = AtomicBoolean(false)
 
     /** Number of HTTP exchanges performed; >1 means redirects or retries. */
-    private var exchangeCount: Int = 0
+    @Volatile private var exchangeCount: Int = 0
 
-    private var requestBytes: Long = -1
-    private var responseBytes: Long = -1
+    @Volatile private var requestBytes: Long = -1
+    @Volatile private var responseBytes: Long = -1
 
     // Phase accumulators, in nanoseconds. Null start marks "phase not running".
-    private var firstWorkNanos: Long? = null
-    private var dnsStart: Long? = null
-    private var dnsTotal: Long = 0
-    private var connectStart: Long? = null
-    private var connectTotal: Long = 0
-    private var tlsStart: Long? = null
-    private var tlsTotal: Long = 0
-    private var requestHeadersStart: Long? = null
-    private var requestHeadersTotal: Long = 0
-    private var requestBodyStart: Long? = null
-    private var requestBodyTotal: Long = 0
-    private var requestEndNanos: Long? = null
-    private var serverTotal: Long = 0
-    private var responseHeadersStart: Long? = null
-    private var responseHeadersTotal: Long = 0
-    private var responseBodyStart: Long? = null
-    private var responseBodyTotal: Long = 0
+    @Volatile private var firstWorkNanos: Long? = null
+    @Volatile private var dnsStart: Long? = null
+    @Volatile private var dnsTotal: Long = 0
+    @Volatile private var connectStart: Long? = null
+    @Volatile private var connectTotal: Long = 0
+    @Volatile private var tlsStart: Long? = null
+    @Volatile private var tlsTotal: Long = 0
+    @Volatile private var requestHeadersStart: Long? = null
+    @Volatile private var requestHeadersTotal: Long = 0
+    @Volatile private var requestBodyStart: Long? = null
+    @Volatile private var requestBodyTotal: Long = 0
+    @Volatile private var requestEndNanos: Long? = null
+    @Volatile private var serverTotal: Long = 0
+    @Volatile private var responseHeadersStart: Long? = null
+    @Volatile private var responseHeadersTotal: Long = 0
+    @Volatile private var responseBodyStart: Long? = null
+    @Volatile private var responseBodyTotal: Long = 0
 
     // ------------------------------------------------------------ call scope
 
@@ -281,8 +291,7 @@ public class LatencyCallListener internal constructor(
 
     private fun finish(error: String?) {
         // callEnd and callFailed can both arrive for one call; emit once.
-        if (finished) return
-        finished = true
+        if (!finished.compareAndSet(false, true)) return
 
         val callUrl = url ?: return
         val totalNanos = System.nanoTime() - callStartNanos

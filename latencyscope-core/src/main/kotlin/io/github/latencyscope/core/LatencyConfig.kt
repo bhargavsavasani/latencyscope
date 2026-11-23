@@ -8,8 +8,6 @@ package io.github.latencyscope.core
  *   recording overnight must not grow without limit.
  * @property captureQueryParams keep query *values*. Off by default; tokens
  *   live in query strings far more often than people expect.
- * @property capturedHeaders lowercase header names to keep. Names on
- *   [Redactor.ALWAYS_SENSITIVE_HEADERS] are masked even if listed here.
  * @property urlFilter return false to ignore a URL entirely — analytics
  *   beacons, image CDNs, log uploads. Called on the recording path, so keep
  *   it cheap.
@@ -17,7 +15,6 @@ package io.github.latencyscope.core
 public data class LatencyConfig(
     public val maxRecords: Int = DEFAULT_MAX_RECORDS,
     public val captureQueryParams: Boolean = false,
-    public val capturedHeaders: Set<String> = emptySet(),
     public val routeNormalizer: RouteNormalizer = DefaultRouteNormalizer(),
     public val warnThresholdMs: Long = DEFAULT_WARN_THRESHOLD_MS,
     public val slowThresholdMs: Long = DEFAULT_SLOW_THRESHOLD_MS,
@@ -38,9 +35,6 @@ public data class LatencyConfig(
         public fun maxRecords(value: Int): Builder = apply { config = config.copy(maxRecords = value) }
         public fun captureQueryParams(value: Boolean): Builder = apply {
             config = config.copy(captureQueryParams = value)
-        }
-        public fun capturedHeaders(value: Set<String>): Builder = apply {
-            config = config.copy(capturedHeaders = value.map { it.lowercase() }.toSet())
         }
         public fun routeNormalizer(value: RouteNormalizer): Builder = apply {
             config = config.copy(routeNormalizer = value)

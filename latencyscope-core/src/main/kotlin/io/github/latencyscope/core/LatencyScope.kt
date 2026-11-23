@@ -140,7 +140,10 @@ public object LatencyScope {
     @JvmStatic
     public fun lastSession(): LatencySession? = lastSession
 
-    /** Drops all recorded calls but keeps recording. */
+    /**
+     * Drops every recorded call — both from the session in progress and the
+     * last finished one — while leaving recording on.
+     */
     @JvmStatic
     public fun clear() {
         active?.clear()
