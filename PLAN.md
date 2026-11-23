@@ -259,6 +259,21 @@ object LatencyExport {
   module is present, prefer the richer EventListener data and suppress the Ktor
   record to avoid double counting (dedupe by request attribute marker).
 - **Done when:** MockEngine tests + one real CIO test green.
+- **✅ COMPLETE** — 13 tests (MockEngine, real CIO, real OkHttp engine).
+  Deviations from the sketch above, all deliberate:
+  - Implemented on the `Send` hook of `createClientPlugin`, which wraps the
+    whole exchange, rather than raw `SendPipeline`/`ReceivePipeline` phases.
+  - **Dedupe is an explicit `deferToEngine` flag, not auto-detection.** There
+    is no reliable way from the plugin to tell whether *this* client's OkHttp
+    engine actually has our EventListener installed. Guessing "yes" when it is
+    not produces a silently empty report, which is the worse failure: a
+    duplicate row is visible and fixable, a missing one is not. Both the
+    deduped and the duplicated case are covered by tests.
+  - Phases are left empty for Ktor records. No Ktor engine exposes DNS/TLS or
+    server think time, and emitting zeros would render as "instant" in the
+    stacked bar. `Source.hasFullPhaseBreakdown` lets the renderer omit the bar.
+  - Response size comes from `Content-Length`; reading the body to measure it
+    would consume the stream before the caller sees it.
 
 ### Phase 4 — `latencyscope-volley` + `latencyscope-urlconnection`
 - Volley: `LatencyHttpStack(delegate: BaseHttpStack)` timing `executeRequest`,

@@ -4,9 +4,10 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-2 complete: the `latencyscope-core` engine
-> and OkHttp/Retrofit instrumentation. Ktor, Volley and `HttpURLConnection`
-> support, the HTML/CSV reports and the debug UIs are still to come.
+> **Status: pre-release.** Phases 0-3 complete: the `latencyscope-core` engine,
+> OkHttp/Retrofit instrumentation and the Ktor client plugin. Volley and
+> `HttpURLConnection` support, the HTML/CSV reports and the debug UIs are
+> still to come.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -22,7 +23,7 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 |---|---|
 | `latencyscope-core` | ✅ Models, recorder, route normalization, redaction, aggregation |
 | `latencyscope-okhttp` | ✅ OkHttp / Retrofit instrumentation (full phase breakdown) |
-| `latencyscope-ktor` | Ktor client plugin (any engine) |
+| `latencyscope-ktor` | ✅ Ktor client plugin (any engine) |
 | `latencyscope-volley` | Volley `BaseHttpStack` wrapper |
 | `latencyscope-urlconnection` | `HttpURLConnection` wrapper |
 | `latencyscope-export` | HTML / CSV / JSON report renderers |
@@ -50,6 +51,25 @@ val report = LatencyScope.report(LatencyScope.stop())
 
 Leaving the instrumentation installed in release builds is safe: with no
 session recording, each callback performs one volatile read and returns.
+
+### Ktor
+
+```kotlin
+val client = HttpClient(CIO) {
+    install(LatencyScopeKtorPlugin)
+}
+```
+
+Ktor records the total round trip, status and declared sizes — no engine
+exposes DNS/TLS/server phases, so those are reported as absent rather than as
+zero. If you run Ktor **on the OkHttp engine** and install
+`installLatencyScope()` on that engine's `OkHttpClient`, set
+`deferToEngine = true` so the call is recorded once, by the layer that can see
+the phase breakdown:
+
+```kotlin
+install(LatencyScopeKtorPlugin) { deferToEngine = true }
+```
 
 ## Build
 
