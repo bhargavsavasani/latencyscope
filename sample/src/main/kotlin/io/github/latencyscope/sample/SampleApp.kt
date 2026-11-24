@@ -5,7 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.os.StrictMode
 import io.github.latencyscope.core.LatencyConfig
 import io.github.latencyscope.core.LatencyScope
-import io.github.latencyscope.export.LatencyAutoReport
+import io.github.latencyscope.export.LatencyNotification
 
 /**
  * Initialisation, in the one place a consumer should do it.
@@ -19,7 +19,9 @@ internal class SampleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         enableStrictMode()
-        installAutoReport()
+        // Installed *before* init, so the session that autoStart begins is
+        // announced rather than missed.
+        LatencyNotification.install(this)
         LatencyScope.init(
             context = this,
             config = LatencyConfig(
@@ -34,24 +36,6 @@ internal class SampleApp : Application() {
                 slowThresholdMs = 1_500,
             ),
         )
-    }
-
-    /**
-     * Writes the report to disk every time the app goes to the background.
-     *
-     * With `autoStart` above, this is the whole integration: launch, use the
-     * app, press Home, and the files are on disk. There is no reliable hook
-     * for an app *exiting* — `onTerminate` never runs on a real device and a
-     * swipe-away kills the process outright — so backgrounding is the last
-     * moment that is guaranteed to happen.
-     *
-     * Pull the files into the repo with:
-     * ```
-     * ./gradlew :sample:pullLatencyReports
-     * ```
-     */
-    private fun installAutoReport() {
-        LatencyAutoReport.install(this)
     }
 
     /**

@@ -2,6 +2,7 @@ package io.github.latencyscope.core
 
 import android.content.Context
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Entry point of the library.
@@ -50,6 +51,13 @@ public object LatencyScope {
     private var lastSession: LatencySession? = null
 
     private val lock = Any()
+
+    /*
+     * Watchers of session start/stop. Copy-on-write because the list is read
+     * on every transition and written once in a blue moon, and because a
+     * listener that unregisters itself while being notified must not throw.
+     */
+    private val sessionListeners = CopyOnWriteArrayList<SessionListener>()
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -118,21 +126,29 @@ public object LatencyScope {
         )
         active = recorder
         SessionHandle(id, recorder.name, startedAtEpochMs)
-    }
+    }.also(::notifyStarted)
 
     /** Stops the active session and returns it, or null if none was running. */
     @JvmStatic
-    public fun stop(): LatencySession? = synchronized(lock) {
-        val recorder = active ?: return null
-        active = null
-        recorder.snapshot(clock.epochMs(), clock.elapsedMs()).also { lastSession = it }
+    public fun stop(): LatencySession? {
+        val session = synchronized(lock) {
+            val recorder = active ?: return null
+            active = null
+            recorder.snapshot(clock.epochMs(), clock.elapsedMs()).also { lastSession = it }
+        }
+        notifyStopped(session)
+        return session
     }
 
     /** Stops only if [handle] is the session currently recording. */
     @JvmStatic
-    public fun stopSession(handle: SessionHandle): LatencySession? = synchronized(lock) {
-        if (active?.id != handle.id) return null
-        stop()
+    public fun stopSession(handle: SessionHandle): LatencySession? {
+        // The identity check is under the lock; stop() is not, so listeners
+        // are never notified while this thread holds it.
+        synchronized(lock) {
+            if (active?.id != handle.id) return null
+        }
+        return stop()
     }
 
     @JvmStatic
@@ -164,14 +180,26 @@ public object LatencyScope {
 
     /** Tears everything down. Mainly for tests and for `onTerminate`. */
     @JvmStatic
-    public fun reset(): Unit = synchronized(lock) {
-        active = null
-        lastSession = null
-        config = LatencyConfig()
-        device = DeviceInfo.UNKNOWN
-        networkTypeProvider = null
-        clock = Clock.SYSTEM
-        initialized = false
+    public fun reset() {
+        val wasRecording = synchronized(lock) {
+            val recording = active != null
+            active = null
+            lastSession = null
+            config = LatencyConfig()
+            device = DeviceInfo.UNKNOWN
+            networkTypeProvider = null
+            clock = Clock.SYSTEM
+            initialized = false
+            recording
+        }
+        // A watcher that is not told would be left showing a session that no
+        // longer exists — a notification stuck on screen, for instance.
+        if (wasRecording) notifyStopped(null)
+
+        // Then drop them: this claims to tear everything down, and a listener
+        // that outlives it keeps whatever it captured alive — an Application,
+        // a notification, a whole previous test's state.
+        sessionListeners.clear()
     }
 
     @JvmStatic
@@ -271,6 +299,63 @@ public object LatencyScope {
             slowThresholdMs = config.slowThresholdMs,
             generatedAtEpochMs = clock.epochMs(),
         )
+    }
+
+    // ---------------------------------------------------------------- watching
+
+    /**
+     * Notified when a session starts or stops, however it was triggered —
+     * [start], [stop], [LatencyConfig.autoStart] or a [SessionHandle].
+     *
+     * This exists so a watcher can be event-driven instead of polling
+     * [isRecording] on a timer. Callbacks run on the thread that started or
+     * stopped the session, outside the lock, so a slow listener delays that
+     * caller and nothing else — and can safely call back into LatencyScope.
+     */
+    public fun interface SessionListener {
+        /** [session] is null when recording stopped. */
+        public fun onSessionChanged(session: LatencySession?)
+    }
+
+    /** Registers [listener]. Safe to call twice; it is only added once. */
+    @JvmStatic
+    public fun addSessionListener(listener: SessionListener) {
+        sessionListeners.addIfAbsent(listener)
+    }
+
+    @JvmStatic
+    public fun removeSessionListener(listener: SessionListener) {
+        sessionListeners.remove(listener)
+    }
+
+    /**
+     * Calls recorded in the session so far, or 0 when none is running.
+     *
+     * O(1) and allocation-free, so a live display can read it as often as it
+     * likes. [currentSession] answers the same question by snapshotting and
+     * sorting every record, which is the wrong tool for a counter.
+     */
+    @JvmStatic
+    public fun recordedCount(): Int = active?.recordedCount ?: 0
+
+    /** Failed calls in the session so far. Counted on the way in, so also O(1). */
+    @JvmStatic
+    public fun errorCount(): Int = active?.errorCount ?: 0
+
+    private fun notifyStarted(handle: SessionHandle) {
+        if (sessionListeners.isEmpty()) return
+        val snapshot = currentSession()
+        sessionListeners.forEach { listener ->
+            // One misbehaving listener must not stop the others, and must
+            // never break the app's networking.
+            runCatching { listener.onSessionChanged(snapshot) }
+        }
+    }
+
+    private fun notifyStopped(session: LatencySession?) {
+        sessionListeners.forEach { listener ->
+            runCatching { listener.onSessionChanged(null) }
+        }
     }
 
     /** Monotonic clock shared with instrumentation modules. */

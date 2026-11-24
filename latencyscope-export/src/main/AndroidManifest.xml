@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Declared here so a consumer adds nothing to their own manifest. It is a
+      runtime permission on Android 13+, and LatencyScope never requests it on
+      the app's behalf: without it the recording notification simply does not
+      appear and the session records exactly as before.
+
+      Wire this module in with debugImplementation (see the README) and the
+      permission is absent from release builds entirely.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application>
         <!--
           A library-local FileProvider authority, so sharing a report never

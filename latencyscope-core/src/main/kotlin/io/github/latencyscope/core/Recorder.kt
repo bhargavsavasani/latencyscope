@@ -1,6 +1,7 @@
 package io.github.latencyscope.core
 
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -24,6 +25,14 @@ internal class Recorder(
     private val sequence = AtomicLong(0)
     private val redactor = Redactor(config.captureQueryParams)
 
+    /*
+     * Live counters for anything watching a session in progress — the
+     * recording notification, mainly. Counting here, with one atomic
+     * increment, is what lets a watcher read the numbers in O(1) instead of
+     * snapshotting and scanning the whole store once a second.
+     */
+    private val errors = AtomicInteger(0)
+
     fun nextId(): String = "${id.take(SHORT_ID_LENGTH)}-${sequence.incrementAndGet()}"
 
     fun accepts(url: String): Boolean = try {
@@ -35,7 +44,14 @@ internal class Recorder(
 
     fun record(record: ApiCallRecord) {
         store.add(record)
+        if (record.isError) errors.incrementAndGet()
     }
+
+    /** Calls kept so far. O(1); the store counts as it goes. */
+    val recordedCount: Int get() = store.size
+
+    /** Failures so far, counted on the way in rather than scanned for. */
+    val errorCount: Int get() = errors.get()
 
     fun buildRecord(call: RawCall): ApiCallRecord {
         val redactedUrl = redactor.redactUrl(call.url)

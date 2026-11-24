@@ -105,6 +105,27 @@ public object LatencyScope {
 
     @JvmStatic
     public fun epochMs(): Long = 0
+
+    /** Mirror of the real [SessionListener]. Never called: nothing ever starts. */
+    public fun interface SessionListener {
+        public fun onSessionChanged(session: LatencySession?)
+    }
+
+    @JvmStatic
+    public fun addSessionListener(listener: SessionListener) {
+        // No session will ever change.
+    }
+
+    @JvmStatic
+    public fun removeSessionListener(listener: SessionListener) {
+        // Nothing was registered.
+    }
+
+    @JvmStatic
+    public fun recordedCount(): Int = 0
+
+    @JvmStatic
+    public fun errorCount(): Int = 0
 }
 
 /** Mirror of the real `Throwable.describe()`. */

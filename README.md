@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 241 tests, 0 lint issues.
+> sample app and the hardening pass. 242 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -38,7 +38,8 @@ dependencies {
 
     // reading the report
     debugImplementation("io.github.GH_USER:latencyscope-export:0.1.0")      // HTML / CSV / JSON
-    debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")  // in-app screen
+                                                                            // + the recording notification
+    debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")  // optional in-app screen
 
     // and nothing at all in release
     releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
@@ -49,6 +50,10 @@ That last line is the point of the library's shape: see
 [Keeping it out of release builds](#keeping-it-out-of-release-builds). If you
 would rather ship the real thing in release, that is safe too — an installed
 but non-recording LatencyScope costs one volatile read per call.
+
+`latencyscope-export` is the one to take if you want the recording
+notification — `LatencyNotification` lives there, next to the writers it
+hands the report to.
 
 **Requirements:** `minSdk 21`, Java 11, AndroidX. OkHttp, Ktor, Volley and
 Compose are `compileOnly` — the library compiles against the oldest version it
@@ -70,68 +75,197 @@ version into your build or overrides yours.
 | `latencyscope-noop` | API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
 
-## Zero-setup mode
+## Quick start
 
-If you would rather not call `start()` and `stop()` at all, turn both ends
-over to the library:
+Three steps. The whole thing, start to finished report, with no manual
+`start()` or `stop()` anywhere.
+
+**1 — wire it up once, in `Application.onCreate`:**
 
 ```kotlin
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Install the notification first, so the session that autoStart
+        // begins is announced rather than missed.
+        LatencyNotification.install(this)
         LatencyScope.init(this, LatencyConfig(autoStart = true))
-        LatencyAutoReport.install(this)          // latencyscope-export
     }
 }
 ```
 
-That is the whole integration. Recording begins at launch, and the report is
-written to disk every time the app goes to the background. Launch, use the
-app, press Home — the files are there.
-
-**Why "goes to background" and not "when the app closes":** there is no
-reliable hook for an app exiting. `Application.onTerminate` is never called on
-a real device, and a swipe-away, an out-of-memory kill, a force-stop and a
-crash all destroy the process without running any of your code. Anything
-written to fire "on exit" loses reports silently — the worst failure mode
-here, because you only find out when you go looking for data that was never
-saved. The background transition is the last moment guaranteed to run, and in
-practice it is the same instant for a person.
-
-The session is **not** stopped by the export. Returning to the app and
-backgrounding it again refreshes the same session's files, so a flow split
-across two visits stays one flow.
-
-Files go to `Android/data/<your app>/files/latencyscope/<session>/`, which
-needs no permission. The oldest session folders are deleted once there are
-more than ten. To pull them into your project:
-
-```bash
-./gradlew :sample:pullLatencyReports     # → <repo>/reports/
-```
-
-In release builds `latencyscope-noop` makes `install()` register nothing,
-start no thread and touch no disk.
-
-## Quick start (OkHttp)
+**2 — instrument the HTTP client you already have:**
 
 ```kotlin
-// once, in Application.onCreate
-LatencyScope.init(this)
-
 val client = OkHttpClient.Builder()
     .installLatencyScope()          // pass your existing EventListener.Factory
     .build()                        // if you have one: .installLatencyScope(mine)
+```
 
-// around the flow you care about
-LatencyScope.start("checkout")
+Using Ktor, Volley or `HttpURLConnection` instead? One line each —
+see [Other HTTP stacks](#other-http-stacks).
+
+**3 — run the app.**
+
+A notification appears saying it is recording. Use the app. Press **Stop &
+report**, then tap the notification to open the report.
+
+That is the whole integration. Everything below is detail.
+
+---
+
+Want to mark the stages of a flow so the timeline is readable?
+
+```kotlin
 LatencyScope.mark("cart opened")
+LatencyScope.mark("checkout submitted")
+```
+
+Prefer to control the window yourself? Drop `autoStart`, and bracket the flow:
+
+```kotlin
+LatencyScope.start("checkout")
 // ... use the app ...
 val report = LatencyScope.report(LatencyScope.stop())
 ```
 
 Leaving the instrumentation installed in release builds is safe: with no
 session recording, each callback performs one volatile read and returns.
+
+## How a session works
+
+A session is a window of recording. Everything else — the report, the HTML,
+the CSV — comes from one.
+
+There are two ways to open that window, and **one way to close it**.
+
+### Start it yourself
+
+```kotlin
+LatencyScope.start("checkout")
+// ... use the app ...
+val report = LatencyScope.report(LatencyScope.stop())
+```
+
+Full control, no notification needed. Good for an automated test, or when you
+want a session to cover exactly one flow.
+
+### Or let it start on launch
+
+```kotlin
+LatencyScope.init(this, LatencyConfig(autoStart = true))
+```
+
+Recording begins the moment the app does, so nothing is missed — including
+everything that happens during startup, which is usually the part you cannot
+get at any other way.
+
+### Either way, a notification is how you stop it
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        LatencyNotification.install(this)                          // before init
+        LatencyScope.init(this, LatencyConfig(autoStart = true))
+    }
+}
+```
+
+Whenever a session starts — by `start()` or by `autoStart` — a notification
+appears:
+
+```
+┌──────────────────────────────────────────────┐
+│  Recording · checkout                        │
+│  1m 12s · 47 calls · 2 failed                │
+│                             [ Stop & report ]│
+└──────────────────────────────────────────────┘
+```
+
+It updates once a second while the session runs. Press **Stop & report** and
+it stops the session, writes all four files, and replaces itself:
+
+```
+┌──────────────────────────────────────────────┐
+│  Latency report ready                        │
+│  Tap to open, or share all four files.       │
+│                                     [ Share ]│
+└──────────────────────────────────────────────┘
+```
+
+Tapping opens the HTML report. **Share** sends all four files wherever you
+like.
+
+Install `LatencyNotification` **before** `init` if you use `autoStart` —
+otherwise the session `init` starts has already begun and its notification is
+missed.
+
+### Why a notification, and not stopping automatically
+
+Because no library can know when your flow ended. Pressing Home in the middle
+of a checkout is not the end of the checkout, and an export triggered there
+would cut the session in half. Worse, there is no dependable hook for an app
+*exiting* at all: `Application.onTerminate` is never called on a real device,
+and a swipe-away, an out-of-memory kill or a crash destroys the process
+without running any of your code — so "write the report when the app closes"
+loses reports silently.
+
+The notification solves both. Recording stays visible the whole time it is
+running, so it is never on by accident, and the decision to stop belongs to
+the only party who knows when the flow is over.
+
+It is **not** a foreground service. Recording happens inside your process
+while it is already alive, so there is nothing to keep running — which spares
+you the `FOREGROUND_SERVICE` permissions and service-type declarations
+Android 14 demands.
+
+### Notification permission
+
+`POST_NOTIFICATIONS` is declared by `latencyscope-export`, so there is nothing
+to add to your manifest. On Android 13+ it is a runtime permission, and the
+library never requests it on your behalf — prompting your users is your
+decision, not a debug tool's. Ask when it suits you:
+
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+}
+```
+
+Deny it and nothing breaks: the session records exactly as before, it is just
+invisible. `LatencyNotification.areNotificationsAllowed(context)` tells you
+which case you are in.
+
+### Where the files go
+
+`Android/data/<your app>/files/latencyscope/<session>/` — no permission
+needed, readable over `adb`, and the ten most recent sessions are kept. To
+pull them into your project:
+
+```bash
+./gradlew :sample:pullLatencyReports     # → <repo>/reports/
+```
+
+### Customising it
+
+```kotlin
+LatencyNotification.install(
+    this,
+    NotificationConfig(
+        smallIcon = R.drawable.ic_stat_latency,
+        stopLabel = "Finish run",
+        keepLastSessions = 25,
+        directory = File(cacheDir, "latency"),      // where reports land
+        openIntent = { files -> myOwnViewer(files.html) },
+    ),
+)
+```
+
+In release builds `latencyscope-noop` makes `install()` register no listener,
+no receiver and no handler, post nothing and start no thread.
+
+## Other HTTP stacks
 
 ### Ktor
 

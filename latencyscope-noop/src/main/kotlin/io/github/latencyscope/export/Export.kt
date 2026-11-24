@@ -4,6 +4,7 @@ package io.github.latencyscope.export
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import io.github.latencyscope.core.LatencyReport
 import io.github.latencyscope.core.Phases
@@ -159,20 +160,21 @@ public object PhaseBreakdown {
 }
 
 /**
- * Mirror of the real [LatencyAutoReport]. Watches nothing and writes nothing.
+ * Mirror of the real [LatencyNotification]. Shows nothing, watches nothing.
  *
- * The release build of an app that calls `install(this)` in `Application`
- * registers no lifecycle callbacks, starts no thread, and touches no disk.
+ * A release build of an app that calls `install(this)` registers no session
+ * listener, no broadcast receiver and no handler, posts no notification and
+ * starts no thread.
  */
-public object LatencyAutoReport {
+public object LatencyNotification {
 
     @JvmStatic
     @JvmOverloads
     public fun install(
         application: Application,
-        config: AutoReportConfig = AutoReportConfig(),
+        config: NotificationConfig = NotificationConfig(),
     ) {
-        // Nothing to watch: nothing is ever recorded.
+        // Nothing records, so there is never a session to announce.
     }
 
     @JvmStatic
@@ -181,20 +183,26 @@ public object LatencyAutoReport {
     }
 
     @JvmStatic
-    @JvmOverloads
-    public fun writeNow(
-        application: Application,
-        config: AutoReportConfig = AutoReportConfig(),
-    ): ExportedFiles? = null
-
-    @JvmStatic
-    public fun defaultRoot(application: Application): File =
-        File(application.filesDir, "latencyscope")
+    public fun areNotificationsAllowed(context: Context): Boolean = false
 }
 
-/** Mirror of the real [AutoReportConfig]. Same shape, never consulted. */
-public data class AutoReportConfig(
+/** Mirror of the real [NotificationConfig]. Same shape, never consulted. */
+public data class NotificationConfig(
+    public val smallIcon: Int = android.R.drawable.ic_dialog_info,
+    public val channelName: String = "LatencyScope",
+    public val channelDescription: String = "Shows when API latency is being recorded.",
+    public val recordingTitle: (String?) -> String = { "" },
+    public val stopLabel: String = "Stop & report",
+    public val workingTitle: String = "Writing report…",
+    public val readyTitle: String = "Latency report ready",
+    public val readyText: String = "Tap to open, or share all four files.",
+    public val failedTitle: String = "Could not write the report",
+    public val shareLabel: String = "Share",
+    public val openChooserTitle: String = "Open latency report",
+    public val shareChooserTitle: String = "Share latency report",
+    public val refreshIntervalMs: Long = 1_000,
     public val directory: File? = null,
     public val keepLastSessions: Int = 10,
+    public val openIntent: ((ExportedFiles) -> Intent)? = null,
     public val onError: (Throwable) -> Unit = {},
 )

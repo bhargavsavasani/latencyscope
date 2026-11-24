@@ -706,52 +706,72 @@ group id is chosen.
 
 ### Zero-setup recording and a richer report (after the audit)
 
-Asked for: start the session automatically, write the report when the app
-stops, land it in a `reports/` directory, and put more context in the report.
+Asked for: start the session automatically, make recording visible while it
+runs, and let the user end it deliberately rather than having the library
+guess. Plus more context in the report.
+
+**First attempt, replaced.** The original build exported on the foreground →
+background transition. It worked, but it answered the wrong question:
+backgrounding is not the end of a flow, so pressing Home mid-checkout cut the
+session in half. The lifecycle watcher was removed and the notification took
+its place.
 
 **What was already there:** `LatencyConfig.autoStart` — built in Phase 1,
-wired in `init`, and never covered by a behavioural test. The flag worked;
-nothing proved it. It also went *unhonoured* by `initForTesting`, so a
-consumer testing their own integration would have seen it silently do
-nothing. Both fixed, and the new test was checked against a reverted
-implementation to be sure it is not vacuous.
+wired in `init`, never covered by a behavioural test, and silently *ignored*
+by `initForTesting`, so a consumer testing their own integration would have
+watched it do nothing. Both fixed, and the new test was checked against a
+reverted implementation to be sure it is not vacuous.
 
-**Where the request could not be met as stated:** there is no reliable hook
-for an app exiting. `Application.onTerminate` is never called on a real
-device, and swipe-away, OOM kill, force-stop and crash all destroy the
-process without running any user code. An "on exit" export would lose reports
-silently — the worst failure here, because it is only discovered when the
-data is missing. The export therefore runs on the **foreground → background
-transition**, the last moment guaranteed to execute. For a person it is the
-same instant, and it still works when the process is killed a minute later.
-
-Likewise there is no "project root" on a device. The app writes to
-`getExternalFilesDir("latencyscope")` — no permission, readable over adb — and
-a new `:sample:pullLatencyReports` Gradle task pulls the folders into
-`<repo>/reports/`, which is what the request actually described.
+**The flow now:** a session starts (by `start()` or `autoStart`) → an ongoing
+notification shows elapsed time, call count and failures, refreshed once a
+second → **Stop & report** ends the session, writes all four files, and
+replaces itself with one that opens or shares them.
 
 | Piece | Decision |
 |---|---|
-| `LatencyAutoReport` | In `latencyscope-export`, since it needs both the recorder and the writers. `install(application)`, `uninstall`, `writeNow`, `defaultRoot` |
-| Background detection | `Application.registerActivityLifecycleCallbacks` and a started-activity count — **no new dependency**. `ProcessLifecycleOwner` would have put `lifecycle-process` in every consumer's graph for two callbacks |
-| Rotation | A configuration change stops the old activity *after* starting the new one, so the count never reaches zero and no report is written. Covered by a test |
-| Session handling | The session is **not** stopped. Each background refreshes that session's files, so a flow split across two visits stays one flow and nothing is lost |
-| Retention | Ten session folders, oldest deleted. A library meant to be left switched on would otherwise fill the device one background at a time |
-| Threading | A daemon single-thread executor. Blocking a lifecycle callback is precisely what a latency library must not do — which also meant the tests had to wait for the write rather than assume it |
+| `LatencyNotification` | In `latencyscope-export`: it needs the recorder *and* the writers |
+| Knowing a session started | A new `LatencyScope.SessionListener`, so the notification is event-driven rather than polling `isRecording()` on a timer. Callbacks fire outside the lock, so a slow listener delays only its own caller |
+| Live counts | New O(1) `recordedCount()` / `errorCount()`, counted on the way in. `currentSession()` answers the same question by snapshotting and sorting every record — the wrong tool for a once-a-second display |
+| Not a foreground service | Recording runs in the app's own live process, so there is nothing to keep alive — which avoids the `FOREGROUND_SERVICE` permissions and service-type declarations Android 14 requires |
+| `POST_NOTIFICATIONS` | Declared by the module so consumers add nothing, never *requested* on their behalf. Denied, the session records as normal and is simply invisible; `notify` is guarded, because a debug tool must never be why an app crashes |
+| Stop button | A `BroadcastReceiver` registered `RECEIVER_NOT_EXPORTED`, with `FLAG_IMMUTABLE` pending intents. The finished notification's tap and share targets are **activity** pending intents, since Android 12 forbids bouncing through a receiver to start an activity |
+| Report location | `getExternalFilesDir("latencyscope")`, reachable over `adb pull`; ten sessions kept. `:sample:pullLatencyReports` brings them into `<repo>/reports/` |
 
-**Report additions**
+**Three bugs the tests caught, all real:**
 
-| Addition | Note |
-|---|---|
-| App display name | `appId` was the package name; `DeviceInfo.appName` is what the user sees |
-| Transport at session start, locale | Context for the header |
-| OS-declared link speed | `NetworkCapabilities` downstream/upstream kbps, labelled **estimate** everywhere it appears — it describes the radio's capability, and is routinely wrong by an order of magnitude |
-| **Measured throughput** | Derived from bytes and `responseBodyMs` — the window where bytes were actually moving. Deliberately **null** for stacks that cannot split that phase: dividing by `totalMs` would blame a fast download for a slow server. Session figure is byte-weighted, so one tiny response cannot drag it around |
-| **Stats split by network** | p50/p95/max/errors per transport. The most diagnostic of the four — it separates "the app is slow" from "the connection is slow". Calls with no readable transport are left out entirely rather than bucketed as "unknown", since `ACCESS_NETWORK_STATE` is optional and never requested on the consumer's behalf |
+1. **The bundled `FileProvider` did not cover where the notification writes.**
+   Its paths file declared `cache-path` only, while reports now land in
+   external files — so tapping *open* or *share* would have thrown
+   `IllegalArgumentException` on a real device. The write succeeds and only
+   the handover fails, which is why nothing earlier noticed. Added
+   `external-files-path`; the no-external-storage fallback was changed from
+   `filesDir` to `cacheDir` so every location the library writes to is one
+   the provider can map, with no third root.
+2. **A session stopped anywhere other than the button left the notification
+   on screen**, still claiming to be recording. The listener now cancels the
+   row, guarded by a flag so the button's own stop does not cancel the row it
+   is about to replace with "writing report…".
+3. **`reset()` did not clear session listeners** despite documenting itself as
+   tearing everything down. Each listener kept an `Application` alive; in the
+   test suite that meant old controllers writing into previous tests'
+   directories.
 
-All of it is in HTML, JSON and CSV, mirrored in the no-op (parity 626 → 665),
-and absent from a minified release build — the sample's release APK still
-contains 5 LatencyScope classes against 351 in debug.
+Report additions: app display name, transport at session start, locale, the
+OS-declared link speed (labelled an **estimate** everywhere — it describes
+the radio's capability and is routinely wrong by an order of magnitude),
+**measured throughput** derived from bytes and `responseBodyMs` (null, not
+zero, for stacks that cannot isolate that window — dividing by `totalMs`
+would blame a fast download for a slow server; the session figure is
+byte-weighted), and **stats split by network type**, which is what separates
+"the app is slow" from "the connection is slow". Calls with no readable
+transport are excluded rather than bucketed as "unknown", since
+`ACCESS_NETWORK_STATE` is optional and never requested on the consumer's
+behalf.
+
+All of it is in HTML, JSON and CSV, mirrored in the no-op (parity 626 → 698),
+and absent from release: the sample's release APK holds 5 LatencyScope
+classes against 361 in debug, and `POST_NOTIFICATIONS` does not appear in the
+release manifest at all.
 
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
