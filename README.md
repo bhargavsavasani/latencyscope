@@ -4,10 +4,10 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-8 complete: the `latencyscope-core`
+> **Status: pre-release.** Phases 0-9 complete: the `latencyscope-core`
 > engine, all four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug
-> UIs, the API-identical no-op for release builds and the sample app.
-> Remaining: hardening and publishing.
+> UIs, the API-identical no-op for release builds, the sample app and the
+> hardening pass. Remaining: docs and publishing.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -235,14 +235,42 @@ The app is also the no-op's proof: nothing in it branches on the build type, and
 the release variant compiles against `latencyscope-noop` instead of the real
 modules without a line changing.
 
+## Overhead
+
+`submit` runs on the thread that just finished the HTTP call, so whatever it
+spends is added to that call's real latency. The budget is **50 µs per call**,
+asserted by an instrumented benchmark against a 10,000-call loop with the
+not-recording path subtracted as the baseline:
+
+```bash
+./gradlew :latencyscope-core:connectedDebugAndroidTest   # needs a device
+```
+
+A second test, `RecordingCostTest`, runs on the JVM in CI and gates the part
+that holds on any machine: per-call cost must not grow with session length.
+When not recording, the cost is one volatile read.
+
+The record store is bounded by `maxRecords` (5,000 by default). Past that the
+oldest record is dropped and counted, and the report says how many — a report
+that silently loses data is worse than one that admits it.
+
 ## Build
 
 ```bash
 ./gradlew assembleDebug
-./gradlew testDebugUnitTest
+./gradlew check            # tests, lint, API parity, coverage floor
 ```
 
 Requires JDK 17. Library modules target `minSdk 21`, `compileSdk 37`.
+
+`:latencyscope-core` carries an 80 % line-coverage floor (`coverageVerify`).
+The sample has a third build type, `staging`: release-shaped minification with
+the *real* library linked, which is the only configuration where a missing
+consumer ProGuard rule can show up.
+
+```bash
+./gradlew :sample:assembleStaging
+```
 
 ## License
 

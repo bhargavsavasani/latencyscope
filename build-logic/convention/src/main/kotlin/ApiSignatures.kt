@@ -125,7 +125,7 @@ internal object ApiSignatures {
             .sorted()
             .forEach { out += "class $name extends $it" }
 
-        kmClass.enumEntries.forEach { out += "enum $name.$it" }
+        kmClass.kmEnumEntries.forEach { out += "enum $name.${it.name}" }
 
         kmClass.constructors
             .filter { it.visibility == Visibility.PUBLIC || it.visibility == Visibility.PROTECTED }

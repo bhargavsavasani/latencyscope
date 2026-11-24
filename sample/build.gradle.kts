@@ -29,6 +29,33 @@ android {
     }
 
     buildTypes {
+        /*
+         * Minification over the *real* library.
+         *
+         * `release` links latencyscope-noop, so R8 there only ever proves the
+         * no-op disappears — it never exercises a consumer rule, because there
+         * is nothing left to keep. `staging` is release with the real modules
+         * linked, which is the configuration an app that ships LatencyScope is
+         * actually in, and the only place a missing keep rule can show up.
+         */
+        create("staging") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            // Deliberately NOT debuggable: R8 skips obfuscation for debuggable
+            // builds, and renaming is half of what this variant is here to
+            // exercise. A class that survives only because nothing was renamed
+            // proves nothing about a consumer's real release build.
+            signingConfig = signingConfigs.getByName("debug")
+            optimization {
+                enable = true
+                packageScope = setOf(
+                    "androidx.**",
+                    "kotlin.**",
+                    "kotlinx.**",
+                    "io.github.**",
+                )
+            }
+        }
         release {
             optimization {
                 enable = true
@@ -67,12 +94,26 @@ dependencies {
     debugImplementation(project(":latencyscope-ui-view"))
     releaseImplementation(project(":latencyscope-noop"))
 
+    // staging = release-style minification, real library. See the build type.
+    "stagingImplementation"(project(":latencyscope-okhttp"))
+    "stagingImplementation"(project(":latencyscope-ktor"))
+    "stagingImplementation"(project(":latencyscope-volley"))
+    "stagingImplementation"(project(":latencyscope-urlconnection"))
+    "stagingImplementation"(project(":latencyscope-export"))
+    "stagingImplementation"(project(":latencyscope-ui-compose"))
+    "stagingImplementation"(project(":latencyscope-ui-view"))
+
     // The instrumentation modules take these compileOnly, so the app supplies
     // them — which is the arrangement a real consumer is already in.
     implementation(libs.okhttp)
     implementation(libs.ktor.client.cio)
     implementation(libs.volley)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Debug only, and only in the sample: LeakCanary watches the Activity and
+    // the clients it owns, which is where a cancelled or failed call would
+    // strand a reference.
+    debugImplementation(libs.leakcanary)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.foundation)

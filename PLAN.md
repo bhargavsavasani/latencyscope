@@ -578,6 +578,76 @@ benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
 - Thread-safety review of every mutable field.
 - Strict mode clean — no disk/network on main thread.
 - `kover` coverage gate ≥ 80 % on core.
+- **✅ COMPLETE** — 217 unit tests, core line coverage **84.7 %** (floor 80 %),
+  one real race fixed. Notes:
+  - **JaCoCo, not Kover.** Kover 0.9.1 discovers what to instrument through the
+    standalone Kotlin plugin, which AGP 9's built-in Kotlin never applies: it
+    produced a report of **zero classes**, and an empty report satisfies every
+    threshold. That is a gate that cannot fail — the same trap as
+    binary-compatibility-validator in Phase 0. `coverageVerify` therefore runs
+    JaCoCo directly and asserts its own class set is non-empty before checking
+    the ratio. It was proved to fail by raising the floor to 95 %.
+  - **The floor found a real gap, not just a number.** `LatencyConfig.Builder`
+    — public API, the entire Java entry point — was at **0 % coverage**, as
+    were `DeviceInfoCollector` and `NetworkTypeProvider`. Covering them took
+    core from 81.6 % to 84.7 % and documented two behaviours that were
+    previously only implied: that an app without `ACCESS_NETWORK_STATE` gets a
+    null label rather than a crash, and that the network type is cached.
+  - **Branch coverage is 53.9 %** and is *not* gated. Most uncovered branches
+    are SDK-level forks (`Build.VERSION.SDK_INT >= M`) that a single Robolectric
+    SDK cannot reach both sides of. Gating a number that honest testing cannot
+    move would only invite `@Suppress`.
+  - **Thread-safety review, every mutable field.** One real defect:
+    `CountingInputStream` guarded its "already reported" flag with a plain
+    check-then-set `Boolean`, while reads happen on the body thread and
+    `close()` can arrive from another — a cancel, or a watchdog calling
+    `disconnect()`. Two threads could both pass the check and record the call
+    **twice**. Now an `AtomicBoolean.compareAndSet` with a volatile counter.
+    The regression test reproduces the old failure reliably over 200 trials.
+    Everything else was already sound: `LatencyScope`'s fields are all
+    `@Volatile` and written under its lock, `RecordStore` is a
+    `ConcurrentLinkedQueue` with atomic counters, the OkHttp and
+    HttpURLConnection listeners are fully volatile, and the UI fields are
+    main-thread only.
+  - **Consumer ProGuard rules are now real, and two of them are load-bearing.**
+    Most modules need none — and the files say so explicitly, with the
+    reasoning, because a blanket `-keep` pins classes in every consumer's
+    release build and defeats what the no-op exists for. `latencyscope-ui-view`
+    needs two: `LatencyReportFragment`, which the `FragmentManager` re-creates
+    by name after process death, and `PhaseBarView`, which is inflated from
+    layout XML. Removing the first and rebuilding makes the class **disappear
+    from the minified APK** — a consumer would have seen the screen work until
+    their process was killed, then crash with `ClassNotFoundException`. The
+    `PhaseBarView` rule is belt and braces: AGP generates an equivalent rule
+    from merged resources, but a library should not depend on that.
+  - **A new `staging` build type is what makes any of that checkable.**
+    `release` links the no-op, so R8 there only ever proves the no-op
+    disappears — it can never exercise a keep rule, because nothing is left to
+    keep. `staging` is release-shaped (minified, obfuscated, **not**
+    debuggable, since R8 skips renaming for debuggable builds) with the real
+    modules linked. That is the configuration a shipping consumer is in.
+  - **Overhead is measured in two places for two different reasons.**
+    `OverheadBenchmark` is instrumented and owns the 50 µs/call budget, because
+    that number is only meaningful on ART on a phone — it is written and
+    compiles, but **needs a device and has not been run here**.
+    `RecordingCostTest` runs on the JVM in CI and gates the part that is
+    machine-independent: per-call cost must not grow with session length.
+    Measured locally at 2,000 calls vs 20,000: **4.2 µs → 2.4 µs per call**
+    (it falls as the JIT warms), ratio 0.6 against a ceiling of 4.0. The
+    regression it exists to catch — making `RecordStore.add` scan, or
+    `buildRecord` consult the records so far — is invisible in a test that
+    records ten calls and fatal in an app recording for an hour.
+  - **StrictMode is on in the sample** whenever the variant is debuggable,
+    before `LatencyScope.init` so it sees initialisation too. `penaltyLog`
+    rather than `penaltyDeath`: a violation raised inside a third-party
+    dependency on an untested device would turn the sample into a
+    crash-on-launch. **LeakCanary** is wired in as `debugImplementation`.
+    Neither has been exercised here — both need a device.
+  - **Known wart, deliberately not changed:** `LatencyConfig` is a `data class`
+    whose `routeNormalizer` and `urlFilter` defaults are a fresh object and a
+    fresh lambda, so `LatencyConfig() != LatencyConfig()`. Fixing it would
+    change published equality semantics; it is recorded here and worked around
+    in the test rather than altered.
 
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
