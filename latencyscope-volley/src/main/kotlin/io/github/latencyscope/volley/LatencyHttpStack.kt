@@ -88,17 +88,21 @@ public class LatencyHttpStack(
         threadName: String?,
         error: String?,
     ) {
+        // Sized once and reused: Request.getBody() re-serialises, so asking
+        // twice would encode the payload twice on the network thread.
+        val requestBytes = requestBodySize(request)
+
         LatencyScope.submit(
             RawCall(
                 source = Source.VOLLEY,
                 url = request.url.orEmpty(),
-                method = methodName(request.method),
+                method = methodName(request.method, requestBytes),
                 statusCode = statusCode,
                 startedAtEpochMs = startEpochMs,
                 startedAtElapsedMs = startElapsedMs,
                 totalMs = totalNanos / NANOS_PER_MILLI,
                 phases = Phases.EMPTY,
-                requestBytes = requestBodySize(request),
+                requestBytes = requestBytes,
                 // Volley reports -1 for a chunked or unknown-length response.
                 responseBytes = responseBytes,
                 retryCount = request.retryPolicy?.currentRetryCount ?: 0,
@@ -125,7 +129,17 @@ public class LatencyHttpStack(
         -1L
     }
 
-    private fun methodName(method: Int): String = when (method) {
+    /**
+     * Volley's integer method, as a name.
+     *
+     * [Request.Method.DEPRECATED_GET_OR_POST] has no fixed name — Volley itself
+     * decides at execution time, picking POST when the request carries a body
+     * and GET when it does not. Labelling every such request "GET" would put a
+     * POST in the report under the wrong method and split one route into two
+     * rows, so the same rule is applied here, reusing the body size already
+     * measured rather than serialising again.
+     */
+    private fun methodName(method: Int, requestBytes: Long): String = when (method) {
         Request.Method.GET -> "GET"
         Request.Method.POST -> "POST"
         Request.Method.PUT -> "PUT"
@@ -134,7 +148,9 @@ public class LatencyHttpStack(
         Request.Method.OPTIONS -> "OPTIONS"
         Request.Method.TRACE -> "TRACE"
         Request.Method.PATCH -> "PATCH"
-        // Request.Method.DEPRECATED_GET_OR_POST and anything a future Volley adds.
+        Request.Method.DEPRECATED_GET_OR_POST -> if (requestBytes > 0) "POST" else "GET"
+        // Anything a future Volley version adds. GET is the safer guess: it is
+        // what Volley falls back to, and it has no side effects.
         else -> "GET"
     }
 

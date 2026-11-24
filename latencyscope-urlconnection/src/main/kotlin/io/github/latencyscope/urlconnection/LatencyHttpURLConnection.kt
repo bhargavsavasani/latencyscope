@@ -284,7 +284,8 @@ public class LatencyHttpURLConnection internal constructor(
                 source = Source.URL_CONNECTION,
                 url = delegate.url.toString(),
                 method = runCatching { delegate.requestMethod }.getOrDefault("GET"),
-                statusCode = error?.let { null } ?: lastKnownStatus(),
+                // A transport failure has no status, by definition.
+                statusCode = if (error != null) null else lastKnownStatus(),
                 startedAtEpochMs = startedAtEpochMs,
                 startedAtElapsedMs = startedAtElapsedMs,
                 totalMs = (System.nanoTime() - startNanos) / NANOS_PER_MILLI,

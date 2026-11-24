@@ -4,10 +4,11 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-9 complete: the `latencyscope-core`
-> engine, all four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug
-> UIs, the API-identical no-op for release builds, the sample app and the
-> hardening pass. Remaining: docs and publishing.
+> **Status: pre-release.** Phases 0-9 complete and audited: the
+> `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
+> both in-app debug UIs, the API-identical no-op for release builds, the
+> sample app and the hardening pass. 220 tests, 0 lint issues.
+> Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -17,22 +18,59 @@ those 450 ms went — connection-pool wait, DNS, TCP, TLS, request upload,
 **server think time**, response download — aggregated per normalized route with
 p50/p90/p95/p99, so a slow screen becomes an actionable number.
 
-## Planned modules
+## Install
+
+> **Not published yet.** `v0.1.0` is in preparation; until it is on Maven
+> Central, add the modules with a [composite build][composite] or by
+> publishing to `mavenLocal()`. The coordinates below are what the release
+> will use — `GH_USER` is a placeholder for the publishing account, not a real
+> group id.
+
+[composite]: https://docs.gradle.org/current/userguide/composite_builds.html
+
+Take only the modules you need. Each HTTP module pulls in `latencyscope-core`;
+nothing else is required.
+
+```kotlin
+dependencies {
+    // the stack you use — one or more
+    debugImplementation("io.github.GH_USER:latencyscope-okhttp:0.1.0")
+
+    // reading the report
+    debugImplementation("io.github.GH_USER:latencyscope-export:0.1.0")      // HTML / CSV / JSON
+    debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")  // in-app screen
+
+    // and nothing at all in release
+    releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
+}
+```
+
+That last line is the point of the library's shape: see
+[Keeping it out of release builds](#keeping-it-out-of-release-builds). If you
+would rather ship the real thing in release, that is safe too — an installed
+but non-recording LatencyScope costs one volatile read per call.
+
+**Requirements:** `minSdk 21`, Java 11, AndroidX. OkHttp, Ktor, Volley and
+Compose are `compileOnly` — the library compiles against the oldest version it
+supports and uses whichever one *your* app already ships, so it never drags a
+version into your build or overrides yours.
+
+## Modules
 
 | Module | Purpose |
 |---|---|
-| `latencyscope-core` | ✅ Models, recorder, route normalization, redaction, aggregation |
-| `latencyscope-okhttp` | ✅ OkHttp / Retrofit instrumentation (full phase breakdown) |
-| `latencyscope-ktor` | ✅ Ktor client plugin (any engine) |
-| `latencyscope-volley` | ✅ Volley `BaseHttpStack` wrapper |
-| `latencyscope-urlconnection` | ✅ `HttpURLConnection` wrapper |
-| `latencyscope-export` | ✅ HTML / CSV / JSON report renderers |
-| `latencyscope-ui-compose` | ✅ Compose debug report screen |
-| `latencyscope-ui-view` | ✅ View-based debug report screen |
-| `latencyscope-noop` | ✅ API-identical no-op for release builds |
+| `latencyscope-core` | Models, recorder, route normalization, redaction, aggregation |
+| `latencyscope-okhttp` | OkHttp / Retrofit instrumentation (full phase breakdown) |
+| `latencyscope-ktor` | Ktor client plugin (any engine) |
+| `latencyscope-volley` | Volley `BaseHttpStack` wrapper |
+| `latencyscope-urlconnection` | `HttpURLConnection` wrapper |
+| `latencyscope-export` | HTML / CSV / JSON report renderers |
+| `latencyscope-ui-compose` | Compose debug report screen |
+| `latencyscope-ui-view` | View-based debug report screen |
+| `latencyscope-noop` | API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
 
-## Usage today (OkHttp)
+## Quick start (OkHttp)
 
 ```kotlin
 // once, in Application.onCreate
@@ -91,6 +129,57 @@ connection.inputStream.use { ... }
 
 There is no global install hook on purpose: `URL.setURLStreamHandlerFactory`
 can be set only once per process and claiming it breaks OkHttp.
+
+## What gets recorded
+
+A latency report is meant to be shared — attached to a ticket, dropped in a
+chat, mailed to a backend team — so the library assumes everything it stores
+will be read by someone it was not written for.
+
+**Redacted before it is ever stored**, not filtered at render time, because
+the in-memory session is itself shareable:
+
+- **Query values are masked by default.** `?token=abc&page=2` is stored as
+  `?token=***&page=***`. Set `captureQueryParams = true` to keep them, and
+  even then a known-sensitive key (`token`, `api_key`, `password`,
+  `signature`, `code`, and a dozen more) is still masked.
+- **Credentials in the URL are dropped** — `https://user:pass@host/` loses the
+  `user:pass` entirely.
+- **Fragments are dropped.**
+
+**Never recorded at all:** request and response bodies, headers, cookies, and
+stack traces. A failure is stored as its exception class and message, nothing
+more. Sizes are counted, never contents.
+
+**Routes are normalized** before aggregation, so `/users/8311/orders` and
+`/users/9022/orders` become one row: `/users/{id}/orders`. Numeric ids
+(`{id}`), UUIDs (`{uuid}`), long hex digests (`{hash}`) and opaque blobs like
+JWTs or signed-URL cursors (`{token}`) are all recognised, and a file
+extension survives normalization — `/images/12345.jpg` becomes
+`/images/{id}.jpg` rather than losing the suffix. Add your own rules,
+or replace the normalizer outright:
+
+```kotlin
+LatencyConfig(
+    routeNormalizer = DefaultRouteNormalizer(
+        rules = listOf(
+            DefaultRouteNormalizer.Rule(Regex("/v[0-9]+/"), "/{version}/"),
+        ),
+    ),
+)
+```
+
+If a whole host should never be recorded, exclude it:
+
+```kotlin
+LatencyScope.init(
+    this,
+    LatencyConfig(urlFilter = { url -> "analytics.example.com" !in url }),
+)
+```
+
+Nothing leaves the device. The library has no network code of its own, no
+uploads and no analytics; a report goes where *you* send it.
 
 ## Getting the report out
 
@@ -193,10 +282,14 @@ declaration by declaration and fails on any drift in either direction, so the
 drop-in claim cannot quietly stop being true.
 
 With R8 enabled and your own packages in scope, what survives in a release
-build is two empty `Activity` classes — they are named in a manifest, which R8
-treats as a root. The sample's minified release APK contains 4 classes under
-`io.github.latencyscope` against 329 in its debug APK — and two of the four are
-the sample's own `MainActivity` and `Application`. No library code survives.
+build is the handful of classes a manifest names, which R8 treats as roots —
+the two report activities — plus `LatencyReportFragment`, kept by a consumer
+rule because the system re-creates fragments by name after process death.
+
+The sample's minified release APK contains 5 classes under
+`io.github.latencyscope` against 329 in its debug APK, and two of those five
+are the sample's own `MainActivity` and `Application`. No library code
+survives.
 
 ## What each stack can see
 

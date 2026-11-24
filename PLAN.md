@@ -649,6 +649,46 @@ benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
     change published equality semantics; it is recorded here and worked around
     in the test rather than altered.
 
+### Audit of Phases 0-9 (done before Phase 10)
+
+A release audit rather than a bug hunt: the question was whether a stranger
+arriving at the GitHub page could install this, understand it, and trust it.
+**220 tests, 0 failures, 0 lint issues, core line coverage 84.7 %.**
+
+| # | Area | Finding | Fix |
+|---|---|---|---|
+| 1 | **Public API** | 13 declarations were public that no documented workflow needs — `RecordStore` (its cap is set through `LatencyConfig.maxRecords`) and `Redactor` (nothing constructs one). Every public type is a permanent commitment the day the library is released, and each one also has to be mirrored in the no-op forever | Both `internal`. Parity surface 639 → **626** |
+| 2 | **Correctness** | Volley's `DEPRECATED_GET_OR_POST` was labelled `"GET"` unconditionally. Volley itself picks POST when the request carries a body, so a legacy POST was filed under the wrong method — and split one route into two rows | Apply Volley's own rule, reusing the body size already measured. The test fails on the old code |
+| 3 | **Integration** | Every link in the chain had tests; the chain had none. A defect in the joins — a route key the renderer cannot find, a redaction applied too late to reach the file — would have shipped | `EndToEndReportTest` in `:sample`: real MockWebServer calls through OkHttp, out to HTML/JSON/CSV, asserting route collapsing, phase data, and that a `token=` value reaches **none** of the three formats |
+| 4 | **Docs** | The README had no install section — the Gradle coordinates were buried 175 lines down inside a section about *removing* the library. The modules table was still headed "Planned", and "Usage today" read like a work log | Install, Requirements and Modules moved to the top; headings rewritten for a reader rather than an author |
+| 5 | **Docs** | Nothing stated what is recorded. For an instrumentation library that is the first question anyone asks, and the answer was only discoverable by reading `Redactor.kt` | A "What gets recorded" section: query masking, credential and fragment stripping, the never-recorded list, route normalization, `urlFilter`, and that nothing leaves the device. Every claim was checked against the code, and all are already pinned by existing tests |
+| 6 | **Docs** | The R8 figure said 4 surviving classes; Phase 9's new `LatencyReportFragment` keep rule made it 5 | Re-measured and corrected, with the reason the fragment is kept |
+| 7 | Readability | `statusCode = error?.let { null } ?: lastKnownStatus()` — a `let` used to mean "if not null, then null" | `if (error != null) null else lastKnownStatus()` |
+| 8 | Java interop | `initForTesting` was the one defaulted public function without `@JvmOverloads` | Added, in core and the mirror |
+| 9 | Docs | `LatencyConfig` documented three of its seven properties with `@property`; `routeNormalizer`, the two thresholds and `autoStart` were bare | Completed, including that the thresholds colour the report and never change what is recorded |
+
+Checked and found correct, so deliberately unchanged:
+- **Percentiles.** Nearest-rank over a sorted array, guarded for empty input
+  and out-of-range arguments; always returns a value that actually occurred.
+- **`api` vs `implementation`.** Every instrumentation module exposes
+  `latencyscope-core` with `api`, so `LatencyScope` resolves for a consumer
+  who depends only on `latencyscope-okhttp`. A single `implementation` here
+  would have made the README's first example fail to compile.
+- **Code hygiene.** No `TODO`, `FIXME`, `!!`, `printStackTrace`, stray logging
+  or empty `catch` blocks anywhere in the library.
+- **Repo hygiene.** `local.properties`, `.idea/`, `build/` and `.kotlin/` are
+  all untracked.
+- **Thread safety.** Re-confirmed after Phase 9: every mutable field is
+  `@Volatile`, atomic, or confined to one thread.
+- **`LatencyConfig` equality** still has the data-class wart from Phase 9
+  (fresh normalizer and lambda defaults). Changing it alters published
+  semantics; it stays documented rather than quietly fixed.
+
+Known gaps, all Phase 10: no CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, issue
+or PR templates, no CI workflows, no publishing config — and the README's
+`io.github.GH_USER` coordinates are a labelled placeholder until the real
+group id is chosen.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

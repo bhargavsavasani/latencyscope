@@ -206,7 +206,35 @@ class LatencyHttpStackTest {
         )
     }
 
+    /**
+     * Volley's legacy method has no fixed name: Volley picks POST when the
+     * request carries a body and GET when it does not. Calling it GET either
+     * way would file a POST under the wrong method and split one route into
+     * two rows in the report.
+     */
+    @Test
+    fun theLegacyMethodFollowsVolleysOwnGetOrPostRule() {
+        val stack = LatencyHttpStack(respondingStack(statusCode = 200, body = ""))
+        LatencyScope.start()
+
+        stack.executeRequest(request(Request.Method.DEPRECATED_GET_OR_POST, "/no-body"), mutableMapOf())
+        stack.executeRequest(legacyWithBody("/with-body", "payload"), mutableMapOf())
+
+        assertEquals(listOf("GET", "POST"), stopAndGetRecords().map { it.method })
+    }
+
     // ----------------------------------------------------------------- utils
+
+    private fun legacyWithBody(path: String, payload: String) =
+        object : StringRequest(
+            Method.DEPRECATED_GET_OR_POST,
+            server.url(path).toString(),
+            {},
+            {},
+        ) {
+            override fun getBody(): ByteArray = payload.toByteArray()
+        }
+
 
     private fun get(path: String) = request(Request.Method.GET, path)
 

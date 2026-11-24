@@ -7,12 +7,16 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Bounded, lock-free store of finished calls.
  *
+ * Internal: an app never builds one of these. A session's records come back
+ * through [LatencySession.records], and the cap is set with
+ * [LatencyConfig.maxRecords].
+ *
  * The append path runs on whatever thread finished the HTTP call, so it must
  * not block, allocate much, or touch disk. When the cap is reached the oldest
  * record is dropped and counted — a report that silently loses data is worse
  * than one that says "4,382 earlier calls were dropped".
  */
-public class RecordStore(
+internal class RecordStore(
     private val maxRecords: Int,
 ) {
     init {
@@ -23,13 +27,13 @@ public class RecordStore(
     private val count = AtomicInteger(0)
     private val dropped = AtomicLong(0)
 
-    public val size: Int
+    val size: Int
         get() = count.get()
 
-    public val droppedCount: Long
+    val droppedCount: Long
         get() = dropped.get()
 
-    public fun add(record: ApiCallRecord) {
+    fun add(record: ApiCallRecord) {
         queue.add(record)
         // Trim in a loop: concurrent adds can briefly overshoot the cap.
         var over = count.incrementAndGet() - maxRecords
@@ -45,10 +49,10 @@ public class RecordStore(
     }
 
     /** Snapshot ordered by start time, oldest first. */
-    public fun snapshot(): List<ApiCallRecord> =
+    fun snapshot(): List<ApiCallRecord> =
         queue.toList().sortedBy { it.startedAtElapsedMs }
 
-    public fun clear() {
+    fun clear() {
         queue.clear()
         count.set(0)
         dropped.set(0)

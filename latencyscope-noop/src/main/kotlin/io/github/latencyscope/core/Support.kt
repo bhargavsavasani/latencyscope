@@ -99,38 +99,11 @@ public data class LatencyConfig(
     }
 }
 
-/** Mirror of the real [Redactor]. Redacts nothing, because it stores nothing. */
-public class Redactor(
-    private val captureQueryParams: Boolean,
-    private val sensitiveQueryKeys: Set<String> = DEFAULT_SENSITIVE_QUERY_KEYS,
-) {
-    public fun redactUrl(url: String): String = url
-
-    public companion object {
-        public const val MASK: String = "***"
-
-        public val DEFAULT_SENSITIVE_QUERY_KEYS: Set<String> = emptySet()
-    }
-}
-
-/** Mirror of the real [RecordStore]. Accepts records and keeps none. */
-public class RecordStore(
-    private val maxRecords: Int,
-) {
-    public val size: Int get() = 0
-
-    public val droppedCount: Long get() = 0
-
-    public fun add(record: ApiCallRecord) {
-        // Dropped on the floor.
-    }
-
-    public fun snapshot(): List<ApiCallRecord> = emptyList()
-
-    public fun clear() {
-        // Nothing to clear.
-    }
-}
+/*
+ * Redactor and RecordStore are not mirrored: both are `internal` in
+ * latencyscope-core, so no consumer can name them and there is nothing for
+ * this module to stand in for.
+ */
 
 /** Mirror of the real [Aggregator]. There is never a session to aggregate. */
 public object Aggregator {

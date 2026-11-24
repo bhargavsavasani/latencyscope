@@ -125,6 +125,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
     testImplementation(libs.junit)
+    // The sample is the only module that has every piece on one classpath, so
+    // it is where the end-to-end test can live: real HTTP in, HTML report out.
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }

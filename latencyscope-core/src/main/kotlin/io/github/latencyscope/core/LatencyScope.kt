@@ -80,6 +80,7 @@ public object LatencyScope {
 
     /** Configures without a [Context]; device info stays unknown. For tests. */
     @JvmStatic
+    @JvmOverloads
     public fun initForTesting(config: LatencyConfig = LatencyConfig()) {
         synchronized(lock) {
             this.config = config

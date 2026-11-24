@@ -7,7 +7,7 @@ package io.github.latencyscope.core
  * backend team. Anything secret must be gone before it reaches a record, not
  * filtered at render time, because the in-memory session is itself shareable.
  */
-public class Redactor(
+internal class Redactor(
     private val captureQueryParams: Boolean,
     private val sensitiveQueryKeys: Set<String> = DEFAULT_SENSITIVE_QUERY_KEYS,
 ) {
@@ -16,7 +16,7 @@ public class Redactor(
      * Returns [url] with userinfo removed, the fragment dropped and query
      * values masked unless the consumer explicitly opted into keeping them.
      */
-    public fun redactUrl(url: String): String {
+    fun redactUrl(url: String): String {
         val noFragment = url.substringBefore('#')
         val withoutUserInfo = stripUserInfo(noFragment)
 
@@ -71,7 +71,7 @@ public class Redactor(
         // a published `ALWAYS_SENSITIVE_HEADERS` that nothing consults reads as
         // a promise the library does not keep. It comes back with the feature.
 
-        public val DEFAULT_SENSITIVE_QUERY_KEYS: Set<String> = setOf(
+        val DEFAULT_SENSITIVE_QUERY_KEYS: Set<String> = setOf(
             "token",
             "access_token",
             "refresh_token",
