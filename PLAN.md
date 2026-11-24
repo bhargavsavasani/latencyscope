@@ -684,6 +684,21 @@ Checked and found correct, so deliberately unchanged:
   (fresh normalizer and lambda defaults). Changing it alters published
   semantics; it stays documented rather than quietly fixed.
 
+**Follow-up after running the sample on a device (same audit round):** the
+screenshot showed the title drawn under the camera cutout and the last card
+under the navigation bar.
+
+| # | Area | Finding | Fix |
+|---|---|---|---|
+| 10 | **UI, affects every consumer** | Neither report screen handled window insets. Android 15 draws every app edge to edge and ignores the opt-out, so the first row of the report sat under the status bar and the last under the navigation bar — in any app that shipped either screen, not just the sample | `enableEdgeToEdge()` plus `safeDrawingPadding()` in the Compose activity; an `OnApplyWindowInsetsListener` in the View activity. Four Robolectric tests, which fail against the old code |
+| 11 | **UI, affects every consumer** | The Compose report activity wrapped itself in a bare `MaterialTheme {}`, which is **always light**, while the report's accent palette already followed the system. In dark mode that produced dark-mode accents on light surfaces — and the README claimed both UIs render in light and dark | An explicit light/dark scheme chosen from `isSystemInDarkTheme()`. The KDoc claimed it inherited "the host app's Material theme", which a separate Activity cannot do; corrected too |
+| 12 | Sample UI | Header and tab row were hand-rolled, with no inset handling and no feedback while a ten-second scenario ran | Rebuilt on `Scaffold` + `TopAppBar` with `WindowInsets.safeDrawing`, a progress bar while a scenario is in flight, a spinner in the pressed button, an empty-state for the log, toast confirmation on `mark()`, and a recording dot that reads in greyscale |
+
+Insets belong to the **host**, not the embeddable composable or view: a
+consumer who drops `LatencyReportScreen` into their own `Scaffold` already has
+padding applied, and padding it twice is as wrong as not padding it at all.
+Only the ready-made activities apply it.
+
 Known gaps, all Phase 10: no CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, issue
 or PR templates, no CI workflows, no publishing config — and the README's
 `io.github.GH_USER` coordinates are a labelled placeholder until the real

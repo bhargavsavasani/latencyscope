@@ -5,8 +5,13 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,18 +27,37 @@ import io.github.latencyscope.export.LatencyExport
  * startActivity(LatencyReportActivity.intent(context))
  * ```
  *
- * It uses the host app's Material theme, so it looks like part of the app it
- * is embedded in. Drop [LatencyReportScreen] into your own screen instead if
- * you want different chrome.
+ * Launched as its own Activity there is no ambient Compose theme to inherit,
+ * so it supplies a plain Material 3 scheme that follows the system's light or
+ * dark setting. Drop [LatencyReportScreen] into your own screen instead to
+ * have it pick up your app's theme and chrome.
+ *
+ * Window insets are handled here rather than in [LatencyReportScreen], because
+ * only a full-screen host knows it owns the whole window. A consumer who
+ * embeds the screen inside their own `Scaffold` already has padding applied
+ * by that scaffold, and padding it twice would be just as wrong as not
+ * padding it at all.
  */
 public class LatencyReportActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Android 15 draws every app edge to edge and ignores the opt-out, so
+        // a screen that does not inset itself has its first and last rows
+        // hidden under the status bar and the navigation bar.
+        enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            // Without an explicit scheme MaterialTheme is always light, while
+            // the report's own accent palette follows the system — which in
+            // dark mode produces dark-mode accents on light surfaces.
+            MaterialTheme(
+                colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(),
+            ) {
                 Surface(Modifier.fillMaxSize()) {
-                    LatestReport()
+                    // safeDrawing, not systemBars: it also covers the display
+                    // cutout and any IME, so the title does not end up behind
+                    // a camera hole on the phones that have one.
+                    LatestReport(Modifier.safeDrawingPadding())
                 }
             }
         }

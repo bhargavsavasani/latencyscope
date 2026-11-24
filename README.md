@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 220 tests, 0 lint issues.
+> sample app and the hardening pass. 224 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -253,6 +253,12 @@ startActivity(io.github.latencyscope.ui.view.LatencyReportActivity.intent(contex
 reportView.setReport(report)
 reportView.onShare = { LatencyExport.shareAsync(context, report) }
 ```
+
+Both ready-made activities draw edge to edge and inset themselves clear of
+the status bar, navigation bar and display cutout, and both follow the
+system's light/dark setting. `LatencyReportScreen` and `LatencyReportView`
+deliberately do **not** apply insets — embedded in your own screen, that is
+your layout's job, and doing it in both places would double the gap.
 
 Both show the same thing — summary, routes, calls and failures with a filter,
 expandable detail and the phase breakdown — and both render in light and dark.
