@@ -3,19 +3,23 @@ package io.github.latencyscope.export
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.FileProvider
 import io.github.latencyscope.core.LatencyReport
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * Turns a [LatencyReport] into files a human or a spreadsheet can read.
  *
  * ```kotlin
  * val report = LatencyScope.report(LatencyScope.stop()) ?: return
- * LatencyExport.share(context, report)          // write everything and share
+ * LatencyExport.shareAsync(context, report)     // write everything and share
  * ```
  *
  * All four renderers run off the same aggregated report, so the HTML page, the
@@ -68,6 +72,9 @@ public object LatencyExport {
      * Writes the report and opens the system share sheet with every file
      * attached.
      *
+     * This writes four files on the calling thread. From a UI callback use
+     * [shareAsync] instead.
+     *
      * @param chooserTitle title for the chooser, defaulting to the session name.
      */
     @JvmStatic
@@ -77,7 +84,15 @@ public object LatencyExport {
         report: LatencyReport,
         chooserTitle: String = "Share latency report",
     ) {
-        val files = writeAll(context, report)
+        startChooser(context, report, writeAll(context, report), chooserTitle)
+    }
+
+    private fun startChooser(
+        context: Context,
+        report: LatencyReport,
+        files: ExportedFiles,
+        chooserTitle: String,
+    ) {
         val uris = ArrayList(files.all.map { file -> uriFor(context, file) })
 
         val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -94,6 +109,47 @@ public object LatencyExport {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)
+    }
+
+    /**
+     * [share], with the file writing moved off the calling thread.
+     *
+     * [writeAll] renders and writes four files, and the HTML alone runs to a
+     * couple of hundred kilobytes for a busy session — far too much to do on
+     * the main thread, which is where a "share report" button click lands.
+     * This renders on a background thread and opens the chooser back on the
+     * main thread. Prefer it over [share] from any UI callback.
+     *
+     * @param onError invoked on the main thread if writing failed; by default
+     *   the failure is rethrown there rather than swallowed, since a share
+     *   button that does nothing at all is its own bug report.
+     */
+    @JvmStatic
+    @JvmOverloads
+    public fun shareAsync(
+        context: Context,
+        report: LatencyReport,
+        chooserTitle: String = "Share latency report",
+        onError: (Throwable) -> Unit = { throw it },
+    ) {
+        val appContext = context.applicationContext
+        val main = Handler(Looper.getMainLooper())
+        ioExecutor.execute {
+            val written = runCatching { writeAll(appContext, report) }
+            main.post {
+                written
+                    .onSuccess { files -> startChooser(context, report, files, chooserTitle) }
+                    .onFailure(onError)
+            }
+        }
+    }
+
+    /**
+     * One daemon thread: exports are rare, and a daemon thread never holds the
+     * process open after the app is done with it.
+     */
+    private val ioExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "latencyscope-export").apply { isDaemon = true }
     }
 
     /** A shareable `content://` URI for a file written by [writeAll]. */

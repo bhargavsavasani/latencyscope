@@ -292,6 +292,10 @@ public class LatencyCallListener internal constructor(
     private fun finish(error: String?) {
         // callEnd and callFailed can both arrive for one call; emit once.
         if (!finished.compareAndSet(false, true)) return
+        // Checked before building anything: with no session running this is the
+        // whole cost of a call, and it must stay one volatile read rather than
+        // a RawCall and a Phases that submit() would immediately discard.
+        if (!LatencyScope.isRecording()) return
 
         val callUrl = url ?: return
         val totalNanos = System.nanoTime() - callStartNanos

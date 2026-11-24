@@ -26,7 +26,7 @@ import io.github.latencyscope.ui.view.databinding.LatencyscopeViewReportBinding
  *
  * ```kotlin
  * reportView.setReport(report)
- * reportView.onShare = { LatencyExport.share(context, report) }
+ * reportView.onShare = { LatencyExport.shareAsync(context, report) }
  * ```
  */
 public class LatencyReportView @JvmOverloads constructor(

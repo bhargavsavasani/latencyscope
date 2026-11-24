@@ -41,13 +41,17 @@ public class LatencyHttpURLConnection internal constructor(
     private val threadName: String = Thread.currentThread().name
     private val finished = AtomicBoolean(false)
 
-    private var connectNanos: Long = 0
-    private var serverNanos: Long = 0
-    private var bodyStartNanos: Long = 0
-    private var bodyNanos: Long = 0
-    private var requestBytes: Long = -1
-    private var responseBytes: Long = -1
-    private var headersResolved = false
+    // Volatile, not plain fields: the request is usually set up on one thread
+    // and the response stream drained on another, and the handoff between them
+    // carries no memory barrier of its own. Without this the recording thread
+    // can publish stale zeros for phases another thread already measured.
+    @Volatile private var connectNanos: Long = 0
+    @Volatile private var serverNanos: Long = 0
+    @Volatile private var bodyStartNanos: Long = 0
+    @Volatile private var bodyNanos: Long = 0
+    @Volatile private var requestBytes: Long = -1
+    @Volatile private var responseBytes: Long = -1
+    @Volatile private var headersResolved = false
 
     // ---------------------------------------------------------- lifecycle
 

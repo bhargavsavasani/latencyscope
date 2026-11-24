@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.SystemClock
 
 /**
  * Best-effort "what was the radio doing" label attached to each call.
@@ -34,9 +35,31 @@ internal class NetworkTypeProvider(context: Context) {
             }.getOrNull()
         }
 
+    @Volatile private var cached: String? = null
+    @Volatile private var cachedAtElapsedMs: Long = Long.MIN_VALUE
+
+    /**
+     * The transport in use, re-read at most once every [CACHE_TTL_MS].
+     *
+     * This runs on the thread that just finished an HTTP call, once per
+     * recorded call. `getNetworkCapabilities` is a binder round trip to
+     * `system_server`, so querying it per call would put tens of microseconds
+     * of IPC on the caller's network path — exactly the overhead this library
+     * exists to measure. The radio does not change on a millisecond scale, so
+     * a short cache costs no accuracy worth having; the steady-state cost is
+     * one monotonic clock read and one volatile read.
+     */
     fun current(): String? {
         val cm = connectivityManager ?: return null
-        return runCatching { readNetworkType(cm) }.getOrNull()
+        val now = SystemClock.elapsedRealtime()
+        val lastRead = cachedAtElapsedMs
+        if (lastRead != Long.MIN_VALUE && now - lastRead < CACHE_TTL_MS) return cached
+
+        // A benign race here re-reads on two threads and stores the same value.
+        val fresh = runCatching { readNetworkType(cm) }.getOrNull()
+        cached = fresh
+        cachedAtElapsedMs = now
+        return fresh
     }
 
     // Lint cannot see that [hasPermission] already gated this: the manager is
@@ -74,5 +97,8 @@ internal class NetworkTypeProvider(context: Context) {
         const val VPN = "vpn"
         const val NONE = "none"
         const val OTHER = "other"
+
+        /** Long enough to drop the IPC off the hot path, short enough to follow a handover. */
+        const val CACHE_TTL_MS = 1_000L
     }
 }

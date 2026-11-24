@@ -186,6 +186,50 @@ class HtmlReportRendererTest {
         assertTrue(html.contains("&quot; onmouseover=&quot;"))
     }
 
+    /**
+     * A `data-tip` value is read with `getAttribute` and assigned to
+     * `innerHTML`, so it is decoded twice. Escaping once would leave a live
+     * tag after the first decode, which the second would then execute.
+     */
+    @Test
+    fun hostileRouteCannotSurviveTheTooltipsSecondDecode() {
+        val html = LatencyExport.toHtml(
+            report(records = listOf(call(route = "/<img src=x onerror=alert(1)>"))),
+        )
+
+        val tip = tipValue(html, "wf-bar")
+        assertFalse(decodeEntities(tip).contains("<img src=x"))
+        assertTrue(tip.contains("&amp;lt;img src=x"))
+    }
+
+    @Test
+    fun hostileMarkerLabelCannotSurviveTheTooltipsSecondDecode() {
+        val hostile = "<img src=x onerror=alert(1)>"
+        val html = LatencyExport.toHtml(
+            report(records = listOf(call()), markers = listOf(Marker(hostile, 0L, 10L))),
+        )
+
+        val tip = tipValue(html, "wf-marker")
+        assertFalse(decodeEntities(tip).contains("<img src=x"))
+        assertTrue(tip.contains("&amp;lt;img src=x"))
+    }
+
+    /** The raw `data-tip` attribute of the first element carrying [cssClass]. */
+    private fun tipValue(html: String, cssClass: String): String {
+        val match = Regex("class=\"[^\"]*$cssClass[^\"]*\"[^>]*data-tip=\"([^\"]*)\"").find(html)
+            ?: Regex("class=\"$cssClass\"[^>]*data-tip=\"([^\"]*)\"").find(html)
+        assertTrue("no data-tip found for .$cssClass", match != null)
+        return match!!.groupValues[1]
+    }
+
+    /** What the browser's attribute parser hands back to `innerHTML`. */
+    private fun decodeEntities(value: String): String = value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+
     // ----------------------------------------------------------- formatting
 
     @Test

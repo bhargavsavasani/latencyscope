@@ -64,7 +64,7 @@ public enum class ReportTab(internal val label: String) {
  * ```kotlin
  * val report = LatencyScope.report()
  * if (report != null) {
- *     LatencyReportScreen(report, onShare = { LatencyExport.share(context, report) })
+ *     LatencyReportScreen(report, onShare = { LatencyExport.shareAsync(context, report) })
  * }
  * ```
  *

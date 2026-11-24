@@ -29,12 +29,6 @@ public class LatencyScopeKtorConfig {
      * is worse than one with a duplicate the user can see.
      */
     public var deferToEngine: Boolean = false
-
-    /**
-     * Treat 4xx/5xx as failures in the record. On by default; turn it off if
-     * your API uses error statuses as normal control flow.
-     */
-    public var recordHttpErrors: Boolean = true
 }
 
 /**
@@ -126,14 +120,19 @@ private fun HttpRequestBuilder.toRawCall(
     error = error,
 )
 
-/** Size of the outgoing body when the content declares one, else -1. */
+/**
+ * Size of the outgoing body when the content declares one, else -1.
+ *
+ * Only declared lengths are read. `ByteArrayContent.bytes()` and
+ * `String.toByteArray()` each copy the whole body, and copying a request body
+ * on the caller's thread to put a number in a debug report is not a trade this
+ * library makes — an unknown size reports as unknown.
+ */
 private fun HttpRequestBuilder.requestBodySize(): Long {
     val content = body
     return when (content) {
-        is OutgoingContent.ByteArrayContent -> content.bytes().size.toLong()
         is OutgoingContent -> content.contentLength ?: -1L
         is ByteArray -> content.size.toLong()
-        is String -> content.toByteArray().size.toLong()
         else -> -1L
     }
 }

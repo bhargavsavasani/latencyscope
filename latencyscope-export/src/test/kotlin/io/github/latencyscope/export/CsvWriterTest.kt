@@ -98,6 +98,34 @@ class CsvWriterTest {
         assertEquals("4", cells[header.indexOf("avg_request_ms")])
     }
 
+    /**
+     * These files are opened in Excel, where a leading `=` means "run this".
+     */
+    @Test
+    fun formulaLikeCellsCannotExecuteInASpreadsheet() {
+        val csv = LatencyExport.toCsvCalls(
+            report(records = listOf(call(error = "=cmd|'/c calc'!A1"))),
+        )
+        val header = csv.trim().split("\r\n")[0].split(",")
+        val cells = splitRow(csv.trim().split("\r\n")[1])
+
+        assertEquals("'=cmd|'/c calc'!A1", cells[header.indexOf("error")])
+    }
+
+    @Test
+    fun negativeNumbersStayNumbers() {
+        val csv = LatencyExport.toCsvCalls(
+            report(records = listOf(call(startMs = -40))),
+        )
+        val header = csv.trim().split("\r\n")[0].split(",")
+        val cells = splitRow(csv.trim().split("\r\n")[1])
+
+        assertEquals("-40", cells[header.indexOf("start_ms")])
+    }
+
+    /** Naive split is fine here: the fixtures hold no quoted commas. */
+    private fun splitRow(row: String): List<String> = row.split(",")
+
     @Test
     fun emptyReportStillWritesAHeader() {
         val csv = LatencyExport.toCsvSummary(report(records = emptyList()))

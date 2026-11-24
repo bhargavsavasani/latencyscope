@@ -97,8 +97,8 @@ can be set only once per process and claiming it breaks OkHttp.
 ```kotlin
 val report = LatencyScope.report(LatencyScope.stop()) ?: return
 
-LatencyExport.share(context, report)      // write all four files, open the share sheet
-val files = LatencyExport.writeAll(context, report)
+LatencyExport.shareAsync(context, report)  // render + write off the main thread, then share
+val files = LatencyExport.writeAll(context, report)   // blocking — call off the main thread
 val html = LatencyExport.toHtml(report)   // or render in memory
 ```
 
@@ -113,6 +113,16 @@ val html = LatencyExport.toHtml(report)   // or render in memory
 
 Sharing goes through a FileProvider bundled with the library, so there is
 nothing to add to your manifest.
+
+Rendering and writing is real work — a busy session produces a few hundred
+kilobytes of HTML — so `shareAsync` does it on a background thread and opens
+the chooser on the main one. `share` and `writeAll` are the blocking forms;
+call those only from a thread where blocking is fine.
+
+Text in the exports is treated as hostile. Recorded URLs, routes and `mark()`
+labels are escaped for the context they land in, including the double decode a
+tooltip attribute goes through, and CSV cells that begin with `=`, `+`, `-` or
+`@` are quoted so a spreadsheet shows them instead of executing them.
 
 ### What the HTML report contains
 
@@ -130,12 +140,17 @@ greyscale or read by a colour-blind reviewer.
 
 ## Looking at the report in the app
 
+`latencyscope-ui-compose` takes Compose as `compileOnly`, so it uses whatever
+Compose version your app already has rather than forcing its own BOM on you.
+Your app supplies `androidx.compose.ui`, `foundation`, `material3` and
+`activity-compose`; if you are calling `LatencyReportScreen` you have them.
+
 Compose:
 
 ```kotlin
 val report = LatencyScope.report()
 if (report != null) {
-    LatencyReportScreen(report, onShare = { LatencyExport.share(context, report) })
+    LatencyReportScreen(report, onShare = { LatencyExport.shareAsync(context, report) })
 }
 // or the ready-made screen:
 startActivity(io.github.latencyscope.ui.compose.LatencyReportActivity.intent(context))
@@ -147,7 +162,7 @@ Views:
 startActivity(io.github.latencyscope.ui.view.LatencyReportActivity.intent(context))
 // or embed it anywhere:
 reportView.setReport(report)
-reportView.onShare = { LatencyExport.share(context, report) }
+reportView.onShare = { LatencyExport.shareAsync(context, report) }
 ```
 
 Both show the same thing — summary, routes, calls and failures with a filter,

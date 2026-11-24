@@ -429,12 +429,53 @@ still hold a `Placeholder.kt` (Phases 4-7), no CI and no publishing (Phase 10).
   - Both report activities are `exported="false"`: a report carries internal
     hostnames and route shapes.
 
+### Audit of Phases 0-6 (done before Phase 7)
+
+`./gradlew clean assembleDebug testDebugUnitTest lintDebug` — **185 unit tests
+green, 0 lint errors** across all 10 modules. Structure, module graph, manifests
+and the root layout are as planned. Nine issues found and fixed:
+
+| # | Severity | Issue | Fix |
+|---|---|---|---|
+| 1 | **Security** | Stored XSS in the HTML report. A `data-tip` value is read with `getAttribute` and assigned to `innerHTML`, so it is decoded **twice**; escaping once left `&lt;img onerror=…&gt;` alive after the first decode. A `mark()` label or a recorded route could run script in whoever opened the report | `escForTip` = escape twice, applied to every `data-tip`; two regression tests assert the attribute survives a simulated browser decode |
+| 2 | **Security** | CSV formula injection — a cell starting `=`, `+`, `-` or `@` executes in Excel/Sheets, and cells hold recorded URLs and server error text | `defuseFormula` prefixes an apostrophe, skipping anything that parses as a number so `-40` stays a figure |
+| 3 | Performance | `NetworkTypeProvider.current()` ran a `getNetworkCapabilities` binder round trip **per recorded call**, on the caller's network thread — the exact overhead this library exists to measure | 1-second TTL cache; steady state is one monotonic read plus one volatile read |
+| 4 | Correctness | `LatencyExport.share` writes four files (~200 kB of HTML) synchronously, and both UI modules called it straight from a click handler → main-thread I/O, ANR risk | New `shareAsync` renders on a daemon thread and opens the chooser on the main one; both UIs and the README now use it |
+| 5 | Concurrency | `LatencyHttpURLConnection`'s phase and byte fields were plain `var` while the request is set up on one thread and the body drained on another — the same defect fixed in the OkHttp listener in the previous audit, missed here | All mutable fields `@Volatile` |
+| 6 | Performance | `PhaseBarView.onDraw` allocated a `RectF` per segment per frame (lint `DrawAllocation`) | Preallocated and reused |
+| 7 | Dead API | `LatencyScopeKtorConfig.recordHttpErrors` was public, documented and **never read**. Its stated meaning is not even representable: core derives success from `statusCode` | Removed, per the rule already applied to `persist` and `capturedHeaders` |
+| 8 | Dead API | `Redactor.ALWAYS_SENSITIVE_HEADERS` was public and unused, with a comment promising Phase 5 would consume it. Phase 5 shipped without header capture | Removed, with a comment saying why it comes back with the feature |
+| 9 | Plan deviation | `latencyscope-ui-compose` took Compose as `implementation`, pushing its BOM onto every consumer — Phase 6 specified `compileOnly` | Switched to `compileOnly`, matching OkHttp/Ktor; documented in the README |
+
+Also fixed while in there: the OkHttp listener built a `RawCall` and a `Phases`
+on every call even with no session recording — now gated on `isRecording()`
+first, so a disabled library really does cost one volatile read. Ktor no longer
+copies a request body (`ByteArrayContent.bytes()`, `String.toByteArray()`) just
+to measure it; only declared lengths are read.
+
+Deliberately **not** changed:
+- **Volley still calls `request.body` to size the payload**, which re-serialises
+  it. `Content-Length` is the only alternative and Volley does not set it in
+  `getHeaders()`, so reading headers would report "unknown" for every POST. The
+  cost is now stated in the KDoc rather than hidden.
+- **`RecordStore.count` can drift from the queue** if `clear()` races an
+  in-flight `add()`. The drift is bounded and self-correcting within a few
+  appends, and every alternative puts a lock or an O(n) size call on the hot
+  path.
+- **Versions stay pinned.** The lint "newer version available" notices are all
+  for `compileOnly` floors (OkHttp 4.12, Ktor 3.2) or for test-only tooling.
+- **`:sample` is still an empty shell** and six modules have no production code
+  beyond their package — those are Phases 7 and 8, not regressions.
+
+Known gaps, all scheduled: no `latencyscope-noop` body and no API-parity gate
+(Phase 7), no sample app (Phase 8), no consumer ProGuard rules, overhead
+benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
+
 ### Phase 7 — `latencyscope-noop`
 - Mirror every public class/function; bodies empty, returning benign defaults.
 - `apiCheck` in CI diffs core `.api` vs noop `.api` — build fails on drift.
 - **Done when:** sample `releaseImplementation` compiles unchanged and R8
   strips calls.
-
 ### Phase 8 — `sample` app
 - Compose app, 4 tabs: OkHttp/Retrofit, Ktor, Volley, HttpURLConnection.
 - Each fires a mix against a real public API (`https://httpbin.org`,

@@ -108,7 +108,17 @@ public class LatencyHttpStack(
         )
     }
 
-    /** `request.body` can throw for a malformed body; an unknown size is fine. */
+    /**
+     * Size of the outgoing body.
+     *
+     * `Request.getBody()` *serialises* the body rather than returning a cached
+     * copy, so this is a second encode of the payload on the network thread —
+     * the stack itself already made the first one. That cost is accepted
+     * knowingly: `Content-Length` is the only alternative source and Volley
+     * does not set it in `getHeaders()`, so reading headers instead would
+     * report "unknown" for essentially every POST. It throws for a malformed
+     * body, and an unknown size is a better outcome than a failed request.
+     */
     private fun requestBodySize(request: Request<*>): Long = try {
         request.body?.size?.toLong() ?: -1L
     } catch (_: Throwable) {

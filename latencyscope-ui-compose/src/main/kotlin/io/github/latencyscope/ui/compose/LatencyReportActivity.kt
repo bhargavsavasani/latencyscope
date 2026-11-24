@@ -70,6 +70,6 @@ public fun LatestReport(modifier: Modifier = Modifier) {
     LatencyReportScreen(
         report = report,
         modifier = modifier,
-        onShare = { LatencyExport.share(context, report) },
+        onShare = { LatencyExport.shareAsync(context, report) },
     )
 }

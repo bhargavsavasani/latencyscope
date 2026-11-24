@@ -67,20 +67,9 @@ public class Redactor(
     public companion object {
         public const val MASK: String = "***"
 
-        /**
-         * Reserved for header capture, which no module records yet. Kept here
-         * so the list is reviewed in one place when Phase 5 adds it.
-         */
-        public val ALWAYS_SENSITIVE_HEADERS: Set<String> = setOf(
-            "authorization",
-            "proxy-authorization",
-            "cookie",
-            "set-cookie",
-            "x-api-key",
-            "x-auth-token",
-            "x-csrf-token",
-            "x-session-token",
-        )
+        // No header allowlist here on purpose: no module records headers, and
+        // a published `ALWAYS_SENSITIVE_HEADERS` that nothing consults reads as
+        // a promise the library does not keep. It comes back with the feature.
 
         public val DEFAULT_SENSITIVE_QUERY_KEYS: Set<String> = setOf(
             "token",

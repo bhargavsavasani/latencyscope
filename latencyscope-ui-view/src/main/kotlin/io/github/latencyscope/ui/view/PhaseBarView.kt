@@ -29,6 +29,13 @@ public class PhaseBarView @JvmOverloads constructor(
         color = ContextCompat.getColor(context, R.color.latencyscope_track)
     }
     private val rect = RectF()
+
+    /**
+     * Squares off the inner end of a rounded segment. Preallocated: [onDraw]
+     * runs on every frame of a scroll, and allocating there is what turns a
+     * smooth list into a janky one once the GC notices.
+     */
+    private val patch = RectF()
     private val gapPx = GAP_DP * resources.displayMetrics.density
     private val radiusPx = RADIUS_DP * resources.displayMetrics.density
 
@@ -78,7 +85,7 @@ public class PhaseBarView @JvmOverloads constructor(
             val roundEnd = index == slices.lastIndex
             if (roundStart || roundEnd) {
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, fill)
-                val patch = RectF(
+                patch.set(
                     if (roundStart) x + radiusPx else x,
                     0f,
                     if (roundEnd) x + segment - radiusPx else x + segment,

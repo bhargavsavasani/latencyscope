@@ -57,6 +57,6 @@ internal fun reportView(context: Context): LatencyReportView =
         val report = LatencyScope.report()
         setReport(report)
         if (report != null) {
-            onShare = { LatencyExport.share(context, report) }
+            onShare = { LatencyExport.shareAsync(context, report) }
         }
     }

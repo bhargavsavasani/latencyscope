@@ -121,9 +121,32 @@ internal object CsvWriter {
     }
 
     private fun escape(cell: Any?): String {
-        val text = cell?.toString() ?: return ""
+        val raw = cell?.toString() ?: return ""
+        val text = defuseFormula(raw)
         val needsQuoting = text.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
         if (!needsQuoting) return text
         return "\"" + text.replace("\"", "\"\"") + "\""
     }
+
+    /**
+     * Neutralises spreadsheet formula injection.
+     *
+     * These files hold recorded URLs and server error messages and are made to
+     * be opened in Excel, Numbers or Sheets, where a cell beginning `=`, `+`,
+     * `-` or `@` is executed as a formula rather than shown as text. A URL that
+     * happens to start with one, or a hostile server reply, would otherwise run
+     * on the reader's machine. A leading apostrophe is the conventional fix:
+     * every spreadsheet reads the rest of the cell as literal text.
+     *
+     * A cell that is simply a negative number is left alone — quoting `-42`
+     * would turn a figure the reader wants to average into text.
+     */
+    private fun defuseFormula(text: String): String = when {
+        text.isEmpty() -> text
+        text[0] !in FORMULA_TRIGGERS -> text
+        text.toDoubleOrNull() != null -> text
+        else -> "'$text"
+    }
+
+    private val FORMULA_TRIGGERS = charArrayOf('=', '+', '-', '@', '\t', '\r')
 }

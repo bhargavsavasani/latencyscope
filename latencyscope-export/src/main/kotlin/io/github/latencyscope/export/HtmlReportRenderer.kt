@@ -253,8 +253,8 @@ internal object HtmlReportRenderer {
 
         append("<ul class=\"legend\">\n")
         PhaseBreakdown.of(Phases.EMPTY).forEach { slice ->
-            append("<li tabindex=\"0\" data-tip=\"<b>").append(esc(slice.label)).append("</b><br>")
-                .append(esc(slice.description)).append("\">")
+            append("<li tabindex=\"0\" data-tip=\"<b>").append(escForTip(slice.label)).append("</b><br>")
+                .append(escForTip(slice.description)).append("\">")
             append("<i class=\"swatch\" style=\"background:var(").append(colorVar(slice.slot)).append(")\"></i>")
             append(esc(slice.label)).append("</li>\n")
         }
@@ -287,9 +287,9 @@ internal object HtmlReportRenderer {
         slices.forEach { slice ->
             append("<span style=\"width:").append(percent(slice.share(accounted) * 100.0))
             append(";background:var(").append(colorVar(slice.slot)).append(")\" data-tip=\"<b>")
-            append(esc(slice.label)).append("</b> ").append(esc(formatMs(slice.ms)))
-            append(" &middot; ").append(esc(formatPercent(slice.share(accounted))))
-            append(" of this route<br>").append(esc(slice.description)).append("\"></span>")
+            append(escForTip(slice.label)).append("</b> ").append(escForTip(formatMs(slice.ms)))
+            append(" &middot; ").append(escForTip(formatPercent(slice.share(accounted))))
+            append(" of this route<br>").append(escForTip(slice.description)).append("\"></span>")
         }
         append("</div>\n")
 
@@ -334,7 +334,7 @@ internal object HtmlReportRenderer {
         report.session.markers.forEach { marker ->
             val left = (marker.atElapsedMs.coerceIn(0, span)).toDouble() / span * 100.0
             append("<div class=\"wf-marker\" style=\"left:").append(percent(left)).append("\" data-tip=\"<b>")
-                .append(esc(marker.label)).append("</b><br>at ").append(esc(formatMs(marker.atElapsedMs)))
+                .append(escForTip(marker.label)).append("</b><br>at ").append(escForTip(formatMs(marker.atElapsedMs)))
                 .append("\"><b>").append(esc(marker.label)).append("</b></div>\n")
         }
 
@@ -348,7 +348,7 @@ internal object HtmlReportRenderer {
             if (record.isError) append(" err")
             append("\" style=\"left:").append(percent(left)).append(";width:")
                 .append(percent(width.coerceAtMost(100.0 - left))).append("\" data-tip=\"")
-            append(esc(callTooltip(record))).append("\"></span></div>\n")
+            append(callTooltip(record)).append("\"></span></div>\n")
         }
 
         append("</div>\n<p class=\"wf-legend\">")
@@ -365,9 +365,9 @@ internal object HtmlReportRenderer {
 
     private fun callTooltip(record: ApiCallRecord): String {
         val status = record.statusCode?.toString() ?: (record.error ?: "failed")
-        return "<b>" + escForAttribute(record.method + " " + record.route) + "</b><br>" +
-            escForAttribute(formatMs(record.totalMs)) + " &middot; " + escForAttribute(status) +
-            "<br>starts at " + escForAttribute(formatMs(record.startedAtElapsedMs))
+        return "<b>" + escForTip(record.method + " " + record.route) + "</b><br>" +
+            escForTip(formatMs(record.totalMs)) + " &middot; " + escForTip(status) +
+            "<br>starts at " + escForTip(formatMs(record.startedAtElapsedMs))
     }
 
     // --------------------------------------------------------- distributions
@@ -417,7 +417,7 @@ internal object HtmlReportRenderer {
             val to = min + (bucketWidth * (index + 1)).toLong()
             append("<span style=\"height:").append(percent(count * 100.0 / peak))
                 .append("\" data-tip=\"<b>").append(count).append(" call(s)</b><br>")
-                .append(esc(formatMs(from))).append(" to ").append(esc(formatMs(to)))
+                .append(escForTip(formatMs(from))).append(" to ").append(escForTip(formatMs(to)))
                 .append("\"></span>")
         }
         append("</div>\n<div class=\"hist-axis\"><span>").append(esc(formatMs(min)))
@@ -557,8 +557,18 @@ internal object HtmlReportRenderer {
         return out.toString()
     }
 
-    /** Tooltips hold small HTML snippets, so their *content* is escaped first. */
-    private fun escForAttribute(value: String): String = esc(value)
+    /**
+     * Escaping for text that ends up inside a `data-tip` attribute.
+     *
+     * A tooltip's value is read back with `getAttribute` and assigned to
+     * `innerHTML`, so it is decoded **twice**: once by the HTML attribute
+     * parser, once by the HTML parser inside `innerHTML`. Escaping only once
+     * means `&lt;img onerror=…&gt;` survives the first decode as a live tag and
+     * executes on the second — a recorded URL, route or [mark] label could run
+     * script in whoever opened the report. Escaping twice makes the markup
+     * survive both decodes as text.
+     */
+    internal fun escForTip(value: String): String = esc(esc(value))
 
     internal fun formatMs(ms: Long): String = LatencyFormat.duration(ms)
 
