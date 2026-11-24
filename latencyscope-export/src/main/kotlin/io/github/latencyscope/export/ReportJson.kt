@@ -26,6 +26,7 @@ internal object ReportJson {
         }
         objectField("session") { writeSession(report) }
         objectField("overall") { writeStats(report.overall) }
+        field("throughputBytesPerSecond", report.throughputBytesPerSecond)
         arrayField("routes") {
             report.routes.forEach { route ->
                 obj {
@@ -44,6 +45,14 @@ internal object ReportJson {
                 obj {
                     field("host", host.host)
                     objectField("stats") { writeStats(host.stats) }
+                }
+            }
+        }
+        arrayField("networks") {
+            report.networks.forEach { network ->
+                obj {
+                    field("networkType", network.networkType)
+                    objectField("stats") { writeStats(network.stats) }
                 }
             }
         }
@@ -74,10 +83,14 @@ internal object ReportJson {
             field("model", device.model)
             field("androidVersion", device.androidVersion)
             field("sdkInt", device.sdkInt)
+            field("appName", device.appName)
             field("appId", device.appId)
             field("appVersionName", device.appVersionName)
             field("appVersionCode", device.appVersionCode)
             field("locale", device.locale)
+            field("networkTypeAtStart", device.networkTypeAtStart)
+            field("linkDownstreamKbps", device.linkDownstreamKbps)
+            field("linkUpstreamKbps", device.linkUpstreamKbps)
         }
         arrayField("markers") {
             session.markers.forEach { marker ->
@@ -138,6 +151,7 @@ internal object ReportJson {
         field("thread", record.threadName)
         field("error", record.error)
         field("networkType", record.networkType)
+        field("throughputBytesPerSecond", record.throughputBytesPerSecond)
         field("success", record.isSuccess)
         objectField("phases") { writePhases(record.phases) }
     }

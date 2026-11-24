@@ -48,6 +48,20 @@ public data class RouteStats(
 }
 
 /** Statistics for one host, to separate your backend from third parties. */
+/**
+ * The same call set, split by the transport it travelled over.
+ *
+ * This is the split that turns "the app is slow" into "the app is slow on
+ * cellular": the same route can be perfectly healthy on wifi and unusable on
+ * a train, and a single blended p95 hides both facts. Only present for calls
+ * whose network could be read — see [ApiCallRecord.networkType].
+ */
+public data class NetworkStats(
+    /** `wifi`, `cellular`, `ethernet`, `vpn`, `none` or `other`. */
+    public val networkType: String,
+    public val stats: Stats,
+)
+
 public data class HostStats(
     public val host: String,
     public val stats: Stats,
@@ -71,6 +85,8 @@ public data class LatencyReport(
     public val overall: Stats,
     public val routes: List<RouteStats>,
     public val hosts: List<HostStats>,
+    /** Per-transport breakdown, busiest first. Empty when no call recorded one. */
+    public val networks: List<NetworkStats>,
     public val errors: List<ErrorGroup>,
     public val warnThresholdMs: Long,
     public val slowThresholdMs: Long,
@@ -83,6 +99,27 @@ public data class LatencyReport(
         get() = routes.maxByOrNull { it.stats.totalMs }
 
     /** True when any phase breakdown is available, i.e. at least one OkHttp call. */
+    /**
+     * Measured download throughput across the session, in bytes per second.
+     *
+     * Averaged over the calls that could report it — see
+     * [ApiCallRecord.throughputBytesPerSecond] — and weighted by bytes, so one
+     * tiny response cannot drag the figure around. Null when no call in the
+     * session had a measurable transfer window.
+     */
+    public val throughputBytesPerSecond: Double?
+        get() {
+            var bytes = 0L
+            var millis = 0L
+            session.records.forEach { record ->
+                val transferMs = record.phases.responseBodyMs ?: return@forEach
+                if (transferMs <= 0 || record.responseBytes <= 0) return@forEach
+                bytes += record.responseBytes
+                millis += transferMs
+            }
+            return if (millis <= 0) null else bytes * 1_000.0 / millis
+        }
+
     public val hasPhaseData: Boolean
         get() = session.records.any { !it.phases.isEmpty }
 }

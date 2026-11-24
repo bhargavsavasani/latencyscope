@@ -38,6 +38,16 @@ public object Aggregator {
             .map { (host, group) -> HostStats(host, statsOf(group)) }
             .sortedByDescending { it.stats.totalMs }
 
+        // Only calls whose transport could be read: ACCESS_NETWORK_STATE is
+        // optional, so an app without it records null here and gets no split
+        // rather than a bogus "unknown" bucket competing with the real ones.
+        val networks = records
+            .groupBy { it.networkType }
+            .mapNotNull { (type, group) ->
+                type?.let { NetworkStats(it, statsOf(group)) }
+            }
+            .sortedByDescending { it.stats.count }
+
         val errors = records
             .filter { it.isError }
             .groupBy { it.errorKey ?: "Unknown" }
@@ -56,6 +66,7 @@ public object Aggregator {
             overall = statsOf(records),
             routes = routes,
             hosts = hosts,
+            networks = networks,
             errors = errors,
             warnThresholdMs = warnThresholdMs,
             slowThresholdMs = slowThresholdMs,

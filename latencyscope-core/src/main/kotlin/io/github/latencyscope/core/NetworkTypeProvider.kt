@@ -62,6 +62,27 @@ internal class NetworkTypeProvider(context: Context) {
         return fresh
     }
 
+    /**
+     * The link speeds the OS advertises for the active transport, in kbps.
+     *
+     * Read once, at init, off the recording path: this is context for the
+     * report header, not a per-call measurement. Returns nulls when the
+     * permission is absent or the platform predates the capability API.
+     */
+    @SuppressLint("MissingPermission")
+    fun linkSpeedsKbps(): Pair<Int?, Int?> {
+        val cm = connectivityManager ?: return null to null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null to null
+        return runCatching {
+            val network = cm.activeNetwork ?: return null to null
+            val caps = cm.getNetworkCapabilities(network) ?: return null to null
+            // 0 means "not reported" rather than "a zero-speed link".
+            caps.linkDownstreamBandwidthKbps.takeIf { it > 0 } to
+                caps.linkUpstreamBandwidthKbps.takeIf { it > 0 }
+        }.getOrDefault(null to null)
+    }
+
+
     // Lint cannot see that [hasPermission] already gated this: the manager is
     // null unless ACCESS_NETWORK_STATE was granted, so these calls are only
     // reachable with the permission held.

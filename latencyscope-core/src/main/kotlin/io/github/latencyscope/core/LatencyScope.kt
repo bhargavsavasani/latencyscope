@@ -65,8 +65,12 @@ public object LatencyScope {
     public fun init(context: Context, config: LatencyConfig = LatencyConfig()) {
         synchronized(lock) {
             this.config = config
-            this.device = DeviceInfoCollector.collect(context)
-            this.networkTypeProvider = NetworkTypeProvider(context)
+            // The provider is built first so the device snapshot can record
+            // which transport the session started on, and at what advertised
+            // link speed.
+            val network = NetworkTypeProvider(context)
+            this.networkTypeProvider = network
+            this.device = DeviceInfoCollector.collect(context, network)
             this.initialized = true
         }
         if (config.autoStart) start()
@@ -78,7 +82,13 @@ public object LatencyScope {
         synchronized(lock) { this.clock = clock }
     }
 
-    /** Configures without a [Context]; device info stays unknown. For tests. */
+    /**
+     * Configures without a [Context]; device info stays unknown. For tests.
+     *
+     * Honours [LatencyConfig.autoStart] exactly as [init] does. It used not
+     * to, which made the flag untestable without a Context and silently
+     * changed behaviour between a consumer's tests and their app.
+     */
     @JvmStatic
     @JvmOverloads
     public fun initForTesting(config: LatencyConfig = LatencyConfig()) {
@@ -88,6 +98,7 @@ public object LatencyScope {
             this.networkTypeProvider = null
             this.initialized = true
         }
+        if (config.autoStart) start()
     }
 
     /** Starts recording, replacing any session already in progress. */

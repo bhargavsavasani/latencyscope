@@ -58,6 +58,32 @@ public data class ApiCallRecord(
     public val totalBytes: Long
         get() = maxOf(requestBytes, 0) + maxOf(responseBytes, 0)
 
+    /**
+     * Measured download throughput in bytes per second, or null when it
+     * cannot be derived honestly.
+     *
+     * This is throughput that actually happened — recorded bytes over the
+     * time they took — not the link speed the OS advertises, which describes
+     * the radio's capability rather than what this call achieved.
+     *
+     * It is measured over [Phases.responseBodyMs] where the stack reports it
+     * (OkHttp, HttpURLConnection), because that is the window where bytes
+     * were really moving. Falling back to [totalMs] would divide by server
+     * think time too and understate a fast transfer behind a slow endpoint,
+     * so stacks that cannot split the phases report null rather than a
+     * number that means something different.
+     */
+    public val throughputBytesPerSecond: Double?
+        get() {
+            val transferMs = phases.responseBodyMs ?: return null
+            if (transferMs <= 0 || responseBytes <= 0) return null
+            return responseBytes * MILLIS_PER_SECOND / transferMs
+        }
+
     public val endedAtElapsedMs: Long
         get() = startedAtElapsedMs + totalMs
+
+    private companion object {
+        const val MILLIS_PER_SECOND = 1_000.0
+    }
 }

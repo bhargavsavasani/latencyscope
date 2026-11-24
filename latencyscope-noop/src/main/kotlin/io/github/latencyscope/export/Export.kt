@@ -2,6 +2,7 @@
 
 package io.github.latencyscope.export
 
+import android.app.Application
 import android.content.Context
 import android.net.Uri
 import io.github.latencyscope.core.LatencyReport
@@ -156,3 +157,44 @@ public object PhaseBreakdown {
     @JvmStatic
     public fun total(phases: Phases): Long = 0
 }
+
+/**
+ * Mirror of the real [LatencyAutoReport]. Watches nothing and writes nothing.
+ *
+ * The release build of an app that calls `install(this)` in `Application`
+ * registers no lifecycle callbacks, starts no thread, and touches no disk.
+ */
+public object LatencyAutoReport {
+
+    @JvmStatic
+    @JvmOverloads
+    public fun install(
+        application: Application,
+        config: AutoReportConfig = AutoReportConfig(),
+    ) {
+        // Nothing to watch: nothing is ever recorded.
+    }
+
+    @JvmStatic
+    public fun uninstall(application: Application) {
+        // Nothing was installed.
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    public fun writeNow(
+        application: Application,
+        config: AutoReportConfig = AutoReportConfig(),
+    ): ExportedFiles? = null
+
+    @JvmStatic
+    public fun defaultRoot(application: Application): File =
+        File(application.filesDir, "latencyscope")
+}
+
+/** Mirror of the real [AutoReportConfig]. Same shape, never consulted. */
+public data class AutoReportConfig(
+    public val directory: File? = null,
+    public val keepLastSessions: Int = 10,
+    public val onError: (Throwable) -> Unit = {},
+)

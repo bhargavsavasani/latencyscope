@@ -96,6 +96,7 @@ public data class ApiCallRecord(
     public val isError: Boolean get() = false
     public val errorKey: String? get() = null
     public val totalBytes: Long get() = 0
+    public val throughputBytesPerSecond: Double? get() = null
     public val endedAtElapsedMs: Long get() = 0
 }
 
@@ -132,10 +133,14 @@ public data class DeviceInfo(
     public val model: String? = null,
     public val androidVersion: String? = null,
     public val sdkInt: Int = 0,
+    public val appName: String? = null,
     public val appId: String? = null,
     public val appVersionName: String? = null,
     public val appVersionCode: Long = 0,
     public val locale: String? = null,
+    public val networkTypeAtStart: String? = null,
+    public val linkDownstreamKbps: Int? = null,
+    public val linkUpstreamKbps: Int? = null,
     public val libraryVersion: String = BuildInfo.VERSION,
 ) {
     public companion object {
@@ -220,6 +225,12 @@ public data class RouteStats(
     public fun timeShare(sessionTotalMs: Long): Double = 0.0
 }
 
+/** Mirror of the real [NetworkStats]. */
+public data class NetworkStats(
+    public val networkType: String,
+    public val stats: Stats,
+)
+
 /** Mirror of the real [HostStats]. */
 public data class HostStats(
     public val host: String,
@@ -240,6 +251,7 @@ public data class LatencyReport(
     public val overall: Stats,
     public val routes: List<RouteStats>,
     public val hosts: List<HostStats>,
+    public val networks: List<NetworkStats>,
     public val errors: List<ErrorGroup>,
     public val warnThresholdMs: Long,
     public val slowThresholdMs: Long,
@@ -248,4 +260,5 @@ public data class LatencyReport(
     public val slowestRoute: RouteStats? get() = null
     public val heaviestRoute: RouteStats? get() = null
     public val hasPhaseData: Boolean get() = false
+    public val throughputBytesPerSecond: Double? get() = null
 }

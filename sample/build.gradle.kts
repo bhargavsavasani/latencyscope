@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -130,4 +132,51 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+}
+
+/*
+ * Brings the auto-written reports off the device and into the repo.
+ *
+ * The app writes to its own external files directory, which needs no
+ * permission and is readable over adb. This is the "reports land in my
+ * project folder" half of the workflow — the device cannot write there
+ * itself, so one command pulls instead.
+ */
+tasks.register<Exec>("pullLatencyReports") {
+    group = "latencyscope"
+    description = "adb pull the auto-written latency reports into <repo>/reports/."
+
+    // AGP 9 drops `android.sdkDirectory`, so the SDK is located the way the
+    // rest of the build finds it: local.properties, then the environment,
+    // then whatever `adb` is already on PATH.
+    val localProperties = rootProject.file("local.properties")
+    val sdkDir = if (localProperties.exists()) {
+        Properties().apply { localProperties.inputStream().use { load(it) } }.getProperty("sdk.dir")
+    } else {
+        null
+    } ?: System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    val adb = sdkDir?.let { File(it, "platform-tools/adb").absolutePath } ?: "adb"
+
+    // Everything the execution phase needs is resolved here, as plain values,
+    // so the task stays configuration-cache safe.
+    val applicationId = requireNotNull(android.defaultConfig.applicationId)
+    val target = rootProject.layout.projectDirectory.dir("reports").asFile
+    val remote = "/sdcard/Android/data/$applicationId/files/latencyscope"
+
+    // A missing directory means "nothing recorded yet", which is an ordinary
+    // state and not a build failure.
+    isIgnoreExitValue = true
+    commandLine(adb, "pull", "-a", remote, target.absolutePath)
+
+    doFirst { target.mkdirs() }
+    doLast {
+        if (executionResult.get().exitValue == 0) {
+            logger.lifecycle("Latency reports pulled into reports/")
+        } else {
+            logger.lifecycle(
+                "No reports pulled. Connect a device, run the sample, press Home " +
+                    "to trigger the auto-export, then run this again.",
+            )
+        }
+    }
 }

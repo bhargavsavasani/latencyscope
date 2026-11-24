@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 224 tests, 0 lint issues.
+> sample app and the hardening pass. 241 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -69,6 +69,49 @@ version into your build or overrides yours.
 | `latencyscope-ui-view` | View-based debug report screen |
 | `latencyscope-noop` | API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
+
+## Zero-setup mode
+
+If you would rather not call `start()` and `stop()` at all, turn both ends
+over to the library:
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        LatencyScope.init(this, LatencyConfig(autoStart = true))
+        LatencyAutoReport.install(this)          // latencyscope-export
+    }
+}
+```
+
+That is the whole integration. Recording begins at launch, and the report is
+written to disk every time the app goes to the background. Launch, use the
+app, press Home — the files are there.
+
+**Why "goes to background" and not "when the app closes":** there is no
+reliable hook for an app exiting. `Application.onTerminate` is never called on
+a real device, and a swipe-away, an out-of-memory kill, a force-stop and a
+crash all destroy the process without running any of your code. Anything
+written to fire "on exit" loses reports silently — the worst failure mode
+here, because you only find out when you go looking for data that was never
+saved. The background transition is the last moment guaranteed to run, and in
+practice it is the same instant for a person.
+
+The session is **not** stopped by the export. Returning to the app and
+backgrounding it again refreshes the same session's files, so a flow split
+across two visits stays one flow.
+
+Files go to `Android/data/<your app>/files/latencyscope/<session>/`, which
+needs no permission. The oldest session folders are deleted once there are
+more than ten. To pull them into your project:
+
+```bash
+./gradlew :sample:pullLatencyReports     # → <repo>/reports/
+```
+
+In release builds `latencyscope-noop` makes `install()` register nothing,
+start no thread and touch no disk.
 
 ## Quick start (OkHttp)
 

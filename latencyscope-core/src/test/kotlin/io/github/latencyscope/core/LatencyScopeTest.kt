@@ -252,4 +252,35 @@ class LatencyScopeTest {
         startedAtElapsedMs = startedAtElapsedMs,
         totalMs = totalMs,
     )
+
+    /**
+     * `autoStart` is the half of "no manual session" that core owns, and it
+     * had no behavioural test — only the builder that sets it. An app that
+     * turns it on and records nothing has no way to tell the flag is broken.
+     */
+    @Test
+    fun autoStartBeginsRecordingWithoutAStartCall() {
+        LatencyScope.reset()
+        LatencyScope.setClockForTesting(clock)
+        LatencyScope.initForTesting(LatencyConfig(autoStart = true))
+
+        assertTrue("autoStart must record without any start() call", LatencyScope.isRecording())
+        LatencyScope.submit(rawCall())
+
+        val session = LatencyScope.stop()
+        assertNotNull(session)
+        assertEquals(1, session!!.records.size)
+    }
+
+    @Test
+    fun withoutAutoStartNothingIsRecordedUntilStart() {
+        LatencyScope.reset()
+        LatencyScope.setClockForTesting(clock)
+        LatencyScope.initForTesting(LatencyConfig())
+
+        assertFalse(LatencyScope.isRecording())
+        LatencyScope.submit(rawCall())
+
+        assertNull(LatencyScope.report())
+    }
 }

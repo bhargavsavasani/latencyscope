@@ -10,3 +10,6 @@ build/
 .cxx
 *.hprof
 .kotlin/
+
+# Reports pulled off a device by :sample:pullLatencyReports
+/reports/

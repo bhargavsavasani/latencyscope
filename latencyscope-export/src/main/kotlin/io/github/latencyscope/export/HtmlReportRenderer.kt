@@ -1,6 +1,7 @@
 package io.github.latencyscope.export
 
 import io.github.latencyscope.core.ApiCallRecord
+import io.github.latencyscope.core.DeviceInfo
 import io.github.latencyscope.core.LatencyReport
 import io.github.latencyscope.core.Phases
 import io.github.latencyscope.core.RouteStats
@@ -43,6 +44,7 @@ internal object HtmlReportRenderer {
         html.appendPhases(report)
         html.appendTimeline(report)
         html.appendDistributions(report)
+        html.appendNetworks(report)
         html.appendErrors(report)
         html.appendCallLog(report)
         html.appendFooter(report)
@@ -72,12 +74,25 @@ internal object HtmlReportRenderer {
         metaRow("Recorded", formatRange(session.startedAtEpochMs, session.endedAtEpochMs))
         metaRow("Session length", formatMs(session.durationMs))
         metaRow("Calls", session.records.size.toString())
-        metaRow("App", listOfNotNull(device.appId, device.appVersionName?.let { "v$it" }).joinToString(" "))
+        metaRow(
+            "App",
+            listOfNotNull(
+                device.appName,
+                device.appId?.let { "($it)" },
+                device.appVersionName?.let { "v$it" },
+            ).joinToString(" ").ifBlank { "unknown" },
+        )
         metaRow("Device", listOfNotNull(device.manufacturer, device.model).joinToString(" ").ifBlank { "unknown" })
         metaRow(
             "Android",
             device.androidVersion?.let { "$it (API ${device.sdkInt})" } ?: "unknown",
         )
+        device.locale?.let { metaRow("Locale", it) }
+        device.networkTypeAtStart?.let { metaRow("Network at start", it) }
+        linkSpeedLabel(device)?.let { metaRow("Link speed (OS estimate)", it) }
+        report.throughputBytesPerSecond?.let {
+            metaRow("Measured download", "${LatencyFormat.bytes(it.toLong())}/s")
+        }
         append("</div>\n")
 
         append("<div class=\"controls\" style=\"margin-top:16px\">")
@@ -449,6 +464,45 @@ internal object HtmlReportRenderer {
         append("</tbody></table></div>\n</section>\n")
     }
 
+    /**
+     * The same calls, split by the transport they travelled over.
+     *
+     * The section that answers "is it the app or is it the network": a route
+     * can be healthy on wifi and unusable on cellular, and a single blended
+     * p95 conceals both halves of that.
+     */
+    private fun StringBuilder.appendNetworks(report: LatencyReport) {
+        if (report.networks.isEmpty()) return
+
+        append("<section>\n<h2>By network</h2>\n")
+        append("<p class=\"section-note\">")
+        append("Only calls whose transport could be read are counted here; this ")
+        append("needs the app to hold ACCESS_NETWORK_STATE, which LatencyScope ")
+        append("never requests on your behalf.")
+        append("</p>\n")
+        append("<div class=\"table-scroll\"><table data-sortable>\n<thead><tr>")
+        append("<th class=\"left\" data-key=\"network\">Network</th>")
+        append("<th data-key=\"count\">Calls</th><th data-key=\"errors\">Errors</th>")
+        append("<th data-key=\"p50\">p50</th><th data-key=\"p95\">p95</th>")
+        append("<th data-key=\"max\">Max</th><th data-key=\"bytes\">Downloaded</th>")
+        append("</tr></thead>\n<tbody>\n")
+
+        report.networks.forEach { network ->
+            val stats = network.stats
+            append("<tr><td class=\"left\" data-key=\"network\" data-value=\"")
+                .append(esc(network.networkType)).append("\">")
+                .append(esc(network.networkType)).append("</td>")
+            numCell("count", stats.count.toLong(), stats.count.toString())
+            numCell("errors", stats.errorCount.toLong(), stats.errorCount.toString())
+            latencyCell(report, "p50", stats.p50Ms)
+            latencyCell(report, "p95", stats.p95Ms)
+            latencyCell(report, "max", stats.maxMs)
+            numCell("bytes", stats.responseBytes, formatBytes(stats.responseBytes))
+            append("</tr>\n")
+        }
+        append("</tbody></table></div>\n</section>\n")
+    }
+
     // -------------------------------------------------------------- call log
 
     private fun StringBuilder.appendCallLog(report: LatencyReport) {
@@ -499,6 +553,9 @@ internal object HtmlReportRenderer {
         if (record.retryCount > 0) kv("Extra exchanges", record.retryCount.toString())
         if (record.fromCache) kv("Cache", "served from cache")
         record.networkType?.let { kv("Network", it) }
+        record.throughputBytesPerSecond?.let {
+            kv("Download speed", "${LatencyFormat.bytes(it.toLong())}/s")
+        }
         record.threadName?.let { kv("Thread", it) }
         record.error?.let { kv("Error", it) }
 
@@ -568,6 +625,33 @@ internal object HtmlReportRenderer {
      * script in whoever opened the report. Escaping twice makes the markup
      * survive both decodes as text.
      */
+    /**
+     * The OS link-speed estimate, or null when it reported nothing.
+     *
+     * Labelled an estimate wherever it appears: it describes what the radio
+     * is nominally capable of, not what any call achieved, and it is often
+     * wrong by an order of magnitude.
+     */
+    private fun linkSpeedLabel(device: DeviceInfo): String? {
+        val down = device.linkDownstreamKbps
+        val up = device.linkUpstreamKbps
+        if (down == null && up == null) return null
+        val parts = listOfNotNull(
+            down?.let { "↓ ${formatKbps(it)}" },
+            up?.let { "↑ ${formatKbps(it)}" },
+        )
+        return parts.joinToString("  ")
+    }
+
+    private const val KBPS_PER_MBPS = 1_000
+
+    private fun formatKbps(kbps: Int): String =
+        if (kbps >= KBPS_PER_MBPS) {
+            "%.1f Mbps".format(Locale.US, kbps.toDouble() / KBPS_PER_MBPS)
+        } else {
+            "$kbps kbps"
+        }
+
     internal fun escForTip(value: String): String = esc(esc(value))
 
     internal fun formatMs(ms: Long): String = LatencyFormat.duration(ms)

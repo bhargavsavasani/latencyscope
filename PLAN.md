@@ -704,6 +704,55 @@ or PR templates, no CI workflows, no publishing config — and the README's
 `io.github.GH_USER` coordinates are a labelled placeholder until the real
 group id is chosen.
 
+### Zero-setup recording and a richer report (after the audit)
+
+Asked for: start the session automatically, write the report when the app
+stops, land it in a `reports/` directory, and put more context in the report.
+
+**What was already there:** `LatencyConfig.autoStart` — built in Phase 1,
+wired in `init`, and never covered by a behavioural test. The flag worked;
+nothing proved it. It also went *unhonoured* by `initForTesting`, so a
+consumer testing their own integration would have seen it silently do
+nothing. Both fixed, and the new test was checked against a reverted
+implementation to be sure it is not vacuous.
+
+**Where the request could not be met as stated:** there is no reliable hook
+for an app exiting. `Application.onTerminate` is never called on a real
+device, and swipe-away, OOM kill, force-stop and crash all destroy the
+process without running any user code. An "on exit" export would lose reports
+silently — the worst failure here, because it is only discovered when the
+data is missing. The export therefore runs on the **foreground → background
+transition**, the last moment guaranteed to execute. For a person it is the
+same instant, and it still works when the process is killed a minute later.
+
+Likewise there is no "project root" on a device. The app writes to
+`getExternalFilesDir("latencyscope")` — no permission, readable over adb — and
+a new `:sample:pullLatencyReports` Gradle task pulls the folders into
+`<repo>/reports/`, which is what the request actually described.
+
+| Piece | Decision |
+|---|---|
+| `LatencyAutoReport` | In `latencyscope-export`, since it needs both the recorder and the writers. `install(application)`, `uninstall`, `writeNow`, `defaultRoot` |
+| Background detection | `Application.registerActivityLifecycleCallbacks` and a started-activity count — **no new dependency**. `ProcessLifecycleOwner` would have put `lifecycle-process` in every consumer's graph for two callbacks |
+| Rotation | A configuration change stops the old activity *after* starting the new one, so the count never reaches zero and no report is written. Covered by a test |
+| Session handling | The session is **not** stopped. Each background refreshes that session's files, so a flow split across two visits stays one flow and nothing is lost |
+| Retention | Ten session folders, oldest deleted. A library meant to be left switched on would otherwise fill the device one background at a time |
+| Threading | A daemon single-thread executor. Blocking a lifecycle callback is precisely what a latency library must not do — which also meant the tests had to wait for the write rather than assume it |
+
+**Report additions**
+
+| Addition | Note |
+|---|---|
+| App display name | `appId` was the package name; `DeviceInfo.appName` is what the user sees |
+| Transport at session start, locale | Context for the header |
+| OS-declared link speed | `NetworkCapabilities` downstream/upstream kbps, labelled **estimate** everywhere it appears — it describes the radio's capability, and is routinely wrong by an order of magnitude |
+| **Measured throughput** | Derived from bytes and `responseBodyMs` — the window where bytes were actually moving. Deliberately **null** for stacks that cannot split that phase: dividing by `totalMs` would blame a fast download for a slow server. Session figure is byte-weighted, so one tiny response cannot drag it around |
+| **Stats split by network** | p50/p95/max/errors per transport. The most diagnostic of the four — it separates "the app is slow" from "the connection is slow". Calls with no readable transport are left out entirely rather than bucketed as "unknown", since `ACCESS_NETWORK_STATE` is optional and never requested on the consumer's behalf |
+
+All of it is in HTML, JSON and CSV, mirrored in the no-op (parity 626 → 665),
+and absent from a minified release build — the sample's release APK still
+contains 5 LatencyScope classes against 351 in debug.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

@@ -120,6 +120,7 @@ public object Aggregator {
         overall = Stats.EMPTY,
         routes = emptyList(),
         hosts = emptyList(),
+        networks = emptyList(),
         errors = emptyList(),
         warnThresholdMs = warnThresholdMs,
         slowThresholdMs = slowThresholdMs,

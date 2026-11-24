@@ -22,7 +22,7 @@ internal object CsvWriter {
         "request_headers_ms", "request_body_ms", "server_ms",
         "response_headers_ms", "response_body_ms",
         "request_bytes", "response_bytes", "protocol", "from_cache", "retry_count",
-        "thread", "network_type", "error",
+        "thread", "network_type", "download_bytes_per_second", "error",
     )
 
     fun summary(report: LatencyReport): String = buildString {
@@ -95,6 +95,9 @@ internal object CsvWriter {
                     record.retryCount,
                     record.threadName,
                     record.networkType,
+                    // Blank rather than 0 when the stack cannot split out a
+                    // transfer window: 0 B/s would read as "no bandwidth".
+                    record.throughputBytesPerSecond?.let { "%.0f".format(it) },
                     record.error,
                 ),
             )
