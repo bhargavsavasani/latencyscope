@@ -1,2 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!--
+          Both report activities are declared here for the same reason their
+          classes exist: a startActivity() call left in release code must be a
+          no-op, not an ActivityNotFoundException. Each finishes in onCreate,
+          so nothing is ever shown.
+
+          Not exported, matching the real modules.
+        -->
+        <activity
+            android:name="io.github.latencyscope.ui.view.LatencyReportActivity"
+            android:exported="false" />
+        <activity
+            android:name="io.github.latencyscope.ui.compose.LatencyReportActivity"
+            android:exported="false" />
+    </application>
+</manifest>

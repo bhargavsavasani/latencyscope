@@ -476,6 +476,59 @@ benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
 - `apiCheck` in CI diffs core `.api` vs noop `.api` — build fails on drift.
 - **Done when:** sample `releaseImplementation` compiles unchanged and R8
   strips calls.
+- **✅ COMPLETE** — **639 public declarations mirrored across eight modules**,
+  7 behaviour tests, `apiCheck` green. Notes:
+  - **Scope: everything, not just core.** §1's own wiring example swaps
+    `-okhttp` and `-ui-compose` for `-noop`, so a release build of shared code
+    calling `installLatencyScope()` or `LatencyExport.shareAsync()` has to keep
+    compiling. Mirroring core alone would have made the documented wiring fail
+    on a consumer's first release build. The no-op therefore takes
+    `compileOnly` dependencies on OkHttp, Ktor, Volley, Compose and AppCompat —
+    compile-time only, so swapping it in adds nothing at runtime.
+  - **The gate reads Kotlin metadata, not bytecode.** The JVM has no
+    `internal`: a plain `javap`-style dump would have demanded the no-op
+    reimplement `Recorder`, `CsvWriter`, `UrlParts` and every other
+    implementation class. `kotlin-metadata-jvm` recovers the real Kotlin
+    visibility and ASM pulls the `@Metadata` annotation off each class without
+    loading it. Nested types are judged by *reachability*, not their own
+    modifier, so a `Companion` inside an `internal class` is excluded.
+  - Compared: class names, supertypes, enum entries, constructors and member
+    JVM descriptors. Supertypes are included because a consumer can hand
+    `LatencyReportActivity` to something expecting an `AppCompatActivity`.
+    Top-level declarations are qualified by package, or two modules' own
+    `installLatencyScope` would satisfy each other.
+  - **ViewBinding classes are the one exclusion**, documented in the task: they
+    are generated from layout XML rather than authored, and mirroring them
+    would mean shipping fake layouts to generate fakes from.
+  - **The gate was tested in both directions** — adding a method to
+    `core.Marker`, then adding one to the no-op's `Marker` — and each fails the
+    build naming the exact signature. A gate that has never failed is not a gate.
+  - **The mirrors are real delegating no-ops, not stubs.** `LatencyCallListener`
+    still forwards every OkHttp callback to a listener the app installed
+    itself, so a client built through `installLatencyScope()` behaves exactly
+    as one built without LatencyScope. `LatencyVolley.stack()` returns the
+    delegate itself rather than wrapping it, and `LatencyUrlConnection.wrap()`
+    returns the caller's own connection: with nothing to measure, interposing
+    would cost calls for no reason.
+  - `track(url, method) { ... }` still runs the block and still lets its
+    exception propagate. The measurement is optional; the caller's work is not.
+  - **Both report activities are declared in the no-op's manifest** and finish
+    in `onCreate`, so a `startActivity(LatencyReportActivity.intent(ctx))` left
+    in release code is a no-op rather than an `ActivityNotFoundException`.
+    This is the one deliberate cost — see the R8 numbers.
+  - **Verified end to end in `:sample`.** `LatencyScopeWiring.kt` compiles into
+    both build types and touches every entry point; real modules on `debug`,
+    the no-op on `release`. Debug APK: **257 LatencyScope classes**. Minified
+    release APK: **2** — the manifest-declared activities, which R8 must keep
+    because the manifest is a root. Everything else is gone.
+  - Two `:sample` changes were needed to make that check real. Its release
+    `optimization.packageScope` omitted `io.github.**`, so R8 was leaving
+    LatencyScope untouched; and `minSdk` moved 28 → 30 because
+    `ktor-client-core` declares identifiers containing spaces, which DEX only
+    permits from version 040 unless R8 renames them away. The second is a
+    constraint of demoing Ktor un-minified, not of LatencyScope — the library
+    modules remain `minSdk 21`.
+
 ### Phase 8 — `sample` app
 - Compose app, 4 tabs: OkHttp/Retrofit, Ktor, Volley, HttpURLConnection.
 - Each fires a mix against a real public API (`https://httpbin.org`,

@@ -22,6 +22,7 @@ androidxTestCore = "1.6.1"
 composeBom = "2025.12.01"
 activityCompose = "1.13.0"
 recyclerview = "1.4.0"
+asm = "9.8"
 
 [libraries]
 androidx-core = { group = "androidx.core", name = "core", version.ref = "coreKtx" }
@@ -56,6 +57,10 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 # Used only by build-logic convention plugins
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
 kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+# Reads Kotlin's @Metadata so the API-parity gate can tell a `public` declaration
+# from an `internal` one, which the JVM makes public either way.
+kotlin-metadata = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
+asm = { group = "org.ow2.asm", name = "asm", version.ref = "asm" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

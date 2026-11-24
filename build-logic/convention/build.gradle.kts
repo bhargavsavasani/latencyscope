@@ -13,6 +13,11 @@ java {
 dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.kotlin.gradlePlugin)
+
+    // The API-parity gate reads class files directly, so these ship with the
+    // convention plugin rather than with any published module.
+    implementation(libs.kotlin.metadata)
+    implementation(libs.asm)
 }
 
 gradlePlugin {
@@ -20,6 +25,10 @@ gradlePlugin {
         register("androidLibrary") {
             id = "latencyscope.android.library"
             implementationClass = "LatencyscopeAndroidLibraryPlugin"
+        }
+        register("apiParity") {
+            id = "latencyscope.api.parity"
+            implementationClass = "LatencyscopeApiParityPlugin"
         }
     }
 }

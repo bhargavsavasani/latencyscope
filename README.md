@@ -4,10 +4,10 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-6 complete: the `latencyscope-core`
-> engine, all four HTTP stacks, the HTML/CSV/JSON exports and both in-app
-> debug UIs. Remaining: the no-op release artifact, the sample app, hardening
-> and publishing.
+> **Status: pre-release.** Phases 0-7 complete: the `latencyscope-core`
+> engine, all four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug
+> UIs and the API-identical no-op for release builds. Remaining: the sample
+> app, hardening and publishing.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -29,7 +29,7 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 | `latencyscope-export` | ✅ HTML / CSV / JSON report renderers |
 | `latencyscope-ui-compose` | ✅ Compose debug report screen |
 | `latencyscope-ui-view` | ✅ View-based debug report screen |
-| `latencyscope-noop` | API-identical no-op for release builds |
+| `latencyscope-noop` | ✅ API-identical no-op for release builds |
 | `sample` | Demo app exercising all four HTTP stacks |
 
 ## Usage today (OkHttp)
@@ -169,6 +169,33 @@ Both show the same thing — summary, routes, calls and failures with a filter,
 expandable detail and the phase breakdown — and both render in light and dark.
 Slow latencies carry a `!` and an accessibility label as well as a colour, so
 the warning survives a greyscale screenshot or a colour-blind reader.
+
+## Keeping it out of release builds
+
+Leaving the instrumentation installed in release is already cheap — one
+volatile read per call — but `latencyscope-noop` removes it entirely:
+
+```kotlin
+debugImplementation("io.github.GH_USER:latencyscope-okhttp:0.1.0")
+debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")
+debugImplementation("io.github.GH_USER:latencyscope-export:0.1.0")
+
+releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
+```
+
+The no-op mirrors the public API of **every** module, not just core, so
+`installLatencyScope()`, `LatencyExport.shareAsync()` and
+`LatencyReportActivity.intent()` all still compile in release and none of them
+do anything. Nothing moves to a debug-only source set.
+
+A build task, `:latencyscope-noop:apiCheck`, compares the two surfaces
+declaration by declaration and fails on any drift in either direction, so the
+drop-in claim cannot quietly stop being true.
+
+With R8 enabled and your own packages in scope, what survives in a release
+build is two empty `Activity` classes — they are named in a manifest, which R8
+treats as a root. The sample's minified release APK contains 2 LatencyScope
+classes against 257 in its debug APK.
 
 ## What each stack can see
 
