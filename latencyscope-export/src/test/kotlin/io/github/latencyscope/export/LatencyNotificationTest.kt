@@ -51,8 +51,28 @@ class LatencyNotificationTest {
         // Both are declared roots in latencyscope_file_paths.xml.
         directory = File(application.cacheDir, "latencyscope")
         directory.deleteRecursively()
+        clearFileProviderCache()
         LatencyScope.reset()
         LatencyScope.setClockForTesting(TestClock())
+    }
+
+    /**
+     * androidx FileProvider parses its paths file once per authority and keeps
+     * the result in a static map. Robolectric hands every test method a fresh
+     * data directory, so without this the first method to touch the provider
+     * pins the roots to its own directory and every later one fails to map a
+     * file that is perfectly valid.
+     *
+     * A quirk of the test environment, not of production, where one
+     * Application lives for the whole process.
+     */
+    private fun clearFileProviderCache() {
+        runCatching {
+            val field = androidx.core.content.FileProvider::class.java
+                .getDeclaredField("sCache")
+            field.isAccessible = true
+            (field.get(null) as? MutableMap<*, *>)?.clear()
+        }
     }
 
     @After
@@ -163,9 +183,13 @@ class LatencyNotificationTest {
         assertEquals(0, shadowOf(manager).allNotifications.size)
     }
 
-    /** Stopping in code, not from the button, must not strand the row either. */
+    /**
+     * Stop has to mean one thing. Whether the Stop button ends the session or
+     * the app calls LatencyScope.stop() itself, the result is the same: the
+     * recording row goes, the report is written, and a notification offers it.
+     */
     @Test
-    fun stoppingTheSessionElsewhereClearsTheRecordingRow() {
+    fun stoppingFromAppCodeProducesTheSameReportAsTheButton() {
         LatencyNotification.install(application, config())
         LatencyScope.initForTesting(LatencyConfig())
         LatencyScope.start("manual")
@@ -175,10 +199,13 @@ class LatencyNotificationTest {
         LatencyScope.stop()
         drainMainThread()
 
+        assertEquals("the report must be written either way", 1, awaitSessions(1).size)
+
         val titles = shadowOf(manager).allNotifications.map {
             shadowOf(it).contentTitle?.toString().orEmpty()
         }
         assertTrue("no row should still claim to be recording: $titles", titles.none { it.contains("Recording") })
+        assertTrue("the finished report should be offered: $titles", titles.any { it.contains("ready", ignoreCase = true) })
     }
 
     @Test

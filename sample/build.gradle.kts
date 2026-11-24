@@ -80,6 +80,22 @@ android {
     }
 }
 
+/*
+ * Unit tests run on a pinned JDK, not whatever launched the daemon.
+ *
+ * The same reason the library convention plugin pins it: Robolectric reads
+ * bytecode with ASM, which refuses class files newer than it knows about
+ * ("Unsupported class file major version"). A developer on a newer JDK should
+ * also not get a different test result from CI.
+ */
+tasks.withType<Test>().configureEach {
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        },
+    )
+}
+
 dependencies {
     /*
      * The wiring the README tells consumers to use: real modules in debug, the
@@ -130,6 +146,10 @@ dependencies {
     // The sample is the only module that has every piece on one classpath, so
     // it is where the end-to-end test can live: real HTTP in, HTML report out.
     testImplementation(libs.okhttp.mockwebserver)
+    // SampleController takes a Context and registers a session listener, so
+    // the state it exposes to the UI can only be tested with a framework.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }

@@ -167,12 +167,21 @@ public object LatencyNotification {
 
         override fun onSessionChanged(session: LatencySession?) {
             if (session == null) {
+                if (stoppingFromAction.get()) return
+                // The session ended somewhere else — app code calling
+                // LatencyScope.stop(), or reset(). Stopping should mean the
+                // same thing however it was triggered, so this writes the
+                // report too rather than leaving two different meanings of
+                // "stop" depending on which button was pressed.
+                val finished = LatencyScope.lastSession()
                 main.post {
                     refresh.stop()
-                    // A session stopped anywhere else — LatencyScope.stop() in
-                    // app code, or reset() — must not leave a row on screen
-                    // still claiming to be recording.
-                    if (!stoppingFromAction.get()) manager.cancel(RECORDING_ID)
+                    if (finished == null) {
+                        // reset(), or a session with nothing to report.
+                        manager.cancel(RECORDING_ID)
+                    } else {
+                        report(finished)
+                    }
                 }
                 return
             }
@@ -260,6 +269,17 @@ public object LatencyNotification {
                 return
             }
 
+            report(session)
+        }
+
+        /**
+         * Renders and writes [session], then swaps the notification for one
+         * that opens it.
+         *
+         * Shared by both ways of stopping, so the Stop button and a plain
+         * `LatencyScope.stop()` leave exactly the same thing behind.
+         */
+        private fun report(session: LatencySession) {
             // Hold the row with a "working" state: rendering a busy session is
             // not instant, and a notification that vanished and came back
             // would read as a glitch.

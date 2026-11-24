@@ -45,7 +45,9 @@ class HtmlReportRendererTest {
         )
 
         assertTrue(html.contains("Summary"))
-        assertTrue(html.contains("Median (p50)"))
+        assertTrue(html.contains("p50"))
+        // The label alone is jargon; the tile has to say what it means.
+        assertTrue(html.contains("half of all calls were faster"))
         assertTrue(html.contains("/users/{id}"))
         assertTrue(html.contains("/orders"))
         assertTrue(html.contains("checkout flow"))
@@ -263,5 +265,42 @@ class HtmlReportRendererTest {
             HtmlReportRenderer.esc("&<>\"'"),
         )
         assertEquals("plain text", HtmlReportRenderer.esc("plain text"))
+    }
+
+    /**
+     * A report gets forwarded — to a backend team, into a ticket, at a
+     * manager. Every term it uses has to explain itself, because a number
+     * nobody can interpret is a number nobody acts on.
+     */
+    @Test
+    fun everyTechnicalTermIsExplainedInTheReport() {
+        val html = LatencyExport.toHtml(report(records = listOf(call(totalMs = 100))))
+
+        listOf("p50", "p75", "p90", "p95", "p99").forEach { percentile ->
+            assertTrue("$percentile is never explained", html.contains("<b>$percentile</b>"))
+        }
+        assertTrue(html.contains("1 in 20 was slower"))
+        assertTrue(html.contains("1 in 100 was slower"))
+
+        // Why percentiles at all, rather than an average.
+        assertTrue(html.contains("average"))
+
+        // The phase names come straight from PhaseBreakdown, so the glossary
+        // cannot drift from the charts.
+        listOf("Wait", "Connect", "Request", "Server", "Response").forEach { phase ->
+            assertTrue("the $phase phase is never explained", html.contains("<b>$phase</b>"))
+        }
+
+        listOf("Route", "Failed / error rate", "Measured download", "By network").forEach { term ->
+            assertTrue("$term is never explained", html.contains(term))
+        }
+    }
+
+    /** Hovering a percentile column should say what it means. */
+    @Test
+    fun percentileColumnHeadersCarryTheirOwnExplanation() {
+        val html = LatencyExport.toHtml(report(records = listOf(call(totalMs = 100))))
+
+        assertTrue(html.contains("data-key=\"p95\" data-tip="))
     }
 }

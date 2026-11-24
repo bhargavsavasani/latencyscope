@@ -773,6 +773,26 @@ and absent from release: the sample's release APK holds 5 LatencyScope
 classes against 361 in debug, and `POST_NOTIFICATIONS` does not appear in the
 release manifest at all.
 
+### Follow-up from running the sample on a device
+
+Three problems reported after a real run, all fixed.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **The sample's header kept saying "Recording", with a Stop button, after the notification had already stopped the session.** `recording` was only ever assigned inside the screen's own toggle, so a session ended anywhere else was invisible to it | The controller subscribes to the `SessionListener` added with the notification, and no longer assigns `recording` itself — one source of truth, whichever way the session changed. Four tests; reverting the subscription fails all four |
+| 2 | **No way to find the report from a desktop.** The path existed only inside a notification | `LatencyExport.writeAll` logs the HTML path and the directory at `I/LatencyScope`. Logged there rather than per call site, so it appears whether the report came from the notification, from `share()`, or from a direct `writeAll()` |
+| 3 | **The report was full of unexplained jargon** — p50/p95/p99, phase names, throughput. A number nobody can interpret is a number nobody acts on, and these reports get forwarded to people who have never seen a percentile | Percentile column headers explain themselves on hover; summary tiles read "1 call in 20 was slower than this"; a **How to read this** section defines every percentile, every phase (pulled straight from `PhaseBreakdown`, so it cannot drift from the charts), route normalization, error rate, measured throughput and the OS link estimate — plus why there is deliberately no average |
+
+**One inconsistency found while fixing these:** the app's Stop and the
+notification's Stop did different things — the button wrote a report, calling
+`LatencyScope.stop()` did not. Stop now means one thing: `LatencyNotification`
+reports on any stop, whoever triggered it.
+
+Also pinned `:sample`'s unit tests to JDK 17. It is an app module, so it never
+got the convention plugin's toolchain, and the first Robolectric test there
+failed with *"Unsupported class file major version 69"* — the exact problem
+the plugin's pin exists to prevent.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

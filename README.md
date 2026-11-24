@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 242 tests, 0 lint issues.
+> sample app and the hardening pass. 248 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -195,7 +195,17 @@ it stops the session, writes all four files, and replaces itself:
 ```
 
 Tapping opens the HTML report. **Share** sends all four files wherever you
-like.
+like. The path is also written to logcat, so you can `adb pull` it:
+
+```
+I/LatencyScope: Latency report written: /storage/.../latencyscope/a1b2c3d4/latency-checkout-….html
+I/LatencyScope: Report directory (4 files): /storage/.../latencyscope/a1b2c3d4
+```
+
+**Stop means one thing.** Whether you press the notification's button or call
+`LatencyScope.stop()` yourself, the session ends, the report is written and
+the notification offers it. There is no second kind of stop that quietly
+skips the report.
 
 Install `LatencyNotification` **before** `init` if you use `autoStart` —
 otherwise the session `init` starts has already begun and its notification is
@@ -389,6 +399,15 @@ Text in the exports is treated as hostile. Recorded URLs, routes and `mark()`
 labels are escaped for the context they land in, including the double decode a
 tooltip attribute goes through, and CSV cells that begin with `=`, `+`, `-` or
 `@` are quoted so a spreadsheet shows them instead of executing them.
+
+### It explains its own numbers
+
+The report is written to be forwarded — to a backend team, into a ticket, at
+someone who has never heard of a percentile. So it defines every term it
+uses, inline: the percentile columns carry their meaning on hover, the
+summary tiles read "1 call in 20 was slower than this" rather than just
+"p95", and a **How to read this** section at the end covers every percentile,
+every phase of a call, and why the report shows no average at all.
 
 ### What the HTML report contains
 

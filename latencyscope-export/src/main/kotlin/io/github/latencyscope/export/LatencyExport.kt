@@ -3,6 +3,7 @@ package io.github.latencyscope.export
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.FileProvider
@@ -148,6 +149,8 @@ public object LatencyExport {
      * One daemon thread: exports are rare, and a daemon thread never holds the
      * process open after the app is done with it.
      */
+    private const val LOG_TAG = "LatencyScope"
+
     private val ioExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "latencyscope-export").apply { isDaemon = true }
     }

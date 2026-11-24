@@ -24,6 +24,24 @@ internal object HtmlReportRenderer {
         "--series-1", "--series-2", "--series-3", "--series-4", "--series-5",
     )
 
+    /**
+     * What each percentile means, in words someone who has never seen one
+     * can act on.
+     *
+     * A report gets forwarded — to a backend team, into a ticket, at a
+     * manager. "p99" is jargon, and a number nobody can interpret is a number
+     * nobody does anything about.
+     */
+    private val PERCENTILE_MEANINGS = mapOf(
+        "p50" to "half of all calls were faster than this. The everyday case.",
+        "p75" to "3 calls in 4 were faster than this.",
+        "p90" to "9 calls in 10 were faster; 1 in 10 was slower.",
+        "p95" to "19 calls in 20 were faster; 1 in 20 was slower. The usual measure of a bad-but-not-rare experience.",
+        "p99" to "99 calls in 100 were faster; 1 in 100 was slower. The tail users remember.",
+    )
+
+    private val PERCENTILE_ORDER = listOf("p50", "p75", "p90", "p95", "p99")
+
     private const val MAX_WATERFALL_ROWS = 400
     private const val MAX_CALL_ROWS = 1_000
     private const val MAX_HISTOGRAM_ROUTES = 12
@@ -128,9 +146,9 @@ internal object HtmlReportRenderer {
             overall.errorCount.toString(),
             formatPercent(overall.errorRate) + " of all calls",
         )
-        tile("Median (p50)", formatMs(overall.p50Ms), "half of calls were faster")
-        tile("p95", formatMs(overall.p95Ms), "1 call in 20 was slower")
-        tile("p99", formatMs(overall.p99Ms), "worst " + formatMs(overall.maxMs))
+        tile("Typical call (p50)", formatMs(overall.p50Ms), "half of all calls were faster than this")
+        tile("Slow call (p95)", formatMs(overall.p95Ms), "1 call in 20 was slower than this")
+        tile("Worst case (p99)", formatMs(overall.p99Ms), "1 call in 100 was slower; worst was " + formatMs(overall.maxMs))
         tile(
             "Transferred",
             formatBytes(overall.requestBytes + overall.responseBytes),
@@ -182,8 +200,8 @@ internal object HtmlReportRenderer {
         append("<th data-key=\"min\">Min</th>")
         append("<th data-key=\"p50\">p50</th>")
         append("<th data-key=\"p90\">p90</th>")
-        append("<th data-key=\"p95\">p95</th>")
-        append("<th data-key=\"p99\">p99</th>")
+        append(percentileHeader("p95"))
+        append(percentileHeader("p99"))
         append("<th data-key=\"max\">Max</th>")
         append("<th data-key=\"total\">Total</th>")
         append("<th data-key=\"share\">Share</th>")
@@ -227,6 +245,18 @@ internal object HtmlReportRenderer {
         val bytes = stats.requestBytes + stats.responseBytes
         numCell("bytes", bytes, formatBytes(bytes))
         append("</tr>\n")
+    }
+
+    /**
+     * A sortable percentile column header that explains itself on hover.
+     *
+     * "p95" means nothing to most people reading a report someone else sent
+     * them, and a number nobody can interpret is a number nobody acts on.
+     */
+    private fun percentileHeader(key: String): String {
+        val tip = PERCENTILE_MEANINGS[key] ?: key
+        return "<th data-key=\"" + key + "\" data-tip=\"<b>" + escForTip(key) + "</b><br>" +
+            escForTip(tip) + "\" tabindex=\"0\">" + esc(key) + "</th>"
     }
 
     private fun StringBuilder.numCell(key: String, value: Long, text: String) {
@@ -483,7 +513,8 @@ internal object HtmlReportRenderer {
         append("<div class=\"table-scroll\"><table data-sortable>\n<thead><tr>")
         append("<th class=\"left\" data-key=\"network\">Network</th>")
         append("<th data-key=\"count\">Calls</th><th data-key=\"errors\">Errors</th>")
-        append("<th data-key=\"p50\">p50</th><th data-key=\"p95\">p95</th>")
+        append(percentileHeader("p50"))
+        append(percentileHeader("p95"))
         append("<th data-key=\"max\">Max</th><th data-key=\"bytes\">Downloaded</th>")
         append("</tr></thead>\n<tbody>\n")
 
@@ -574,15 +605,63 @@ internal object HtmlReportRenderer {
     private fun StringBuilder.appendFooter(report: LatencyReport) {
         append("<footer class=\"page\">\n")
         append("<h3>How to read this</h3>\n")
-        append("<p><b>Percentiles</b> are exact and use nearest rank: p95 is a duration some ")
-        append("call actually took, not an interpolated value no request ever saw.</p>\n")
-        append("<p><b>Server</b> is the gap between the request being fully sent and the first ")
-        append("response byte arriving. It is the closest a client can get to backend time, and ")
-        append("it excludes connection setup and download.</p>\n")
-        append("<p><b>Absent phases are blank, never zero.</b> A reused connection has no DNS or ")
-        append("TLS phase at all, which is a different fact from one that took no time.</p>\n")
-        append("<p><b>Routes are normalized</b> — <code>/users/42</code> and <code>/users/7</code> ")
-        append("are counted together as <code>/users/{id}</code>.</p>\n")
+
+        append("<h4>The percentile columns (p50, p75, p90, p95, p99)</h4>\n")
+        append("<p>Sort every call of a route from fastest to slowest. The <b>p95</b> is the ")
+        append("duration 95% of them came in under — so 1 call in 20 was slower than that ")
+        append("number. The others read the same way:</p>\n")
+        append("<ul>\n")
+        PERCENTILE_ORDER.forEach { key ->
+            append("<li><b>").append(esc(key)).append("</b> — ")
+                .append(esc(PERCENTILE_MEANINGS.getValue(key))).append("</li>\n")
+        }
+        append("</ul>\n")
+        append("<p>An <b>average</b> is not here on purpose. One 8-second timeout among a ")
+        append("hundred fast calls barely moves an average, while it is exactly the ")
+        append("experience a user complains about. Percentiles keep it visible: watch p95 ")
+        append("and p99 for the calls that hurt, p50 for the everyday case.</p>\n")
+        append("<p>They are exact and use nearest rank: p95 is a duration some call really ")
+        append("took, not an interpolated value no request ever saw.</p>\n")
+        append("<h4>Where a call's time goes</h4>\n")
+        append("<p>Every call is split into the stretches below. They run in this order, and ")
+        append("together they account for the whole duration:</p>\n")
+        append("<ul>\n")
+        // Straight from PhaseBreakdown, so the glossary cannot drift from the
+        // labels the charts above are drawn with.
+        PhaseBreakdown.of(Phases.EMPTY).forEach { slice ->
+            append("<li><b>").append(esc(slice.label)).append("</b> — ")
+                .append(esc(slice.description)).append("</li>\n")
+        }
+        append("</ul>\n")
+        append("<p><b>Server</b> is the one to watch: it is the closest a client can get to ")
+        append("backend time, and it excludes connection setup and download entirely. A slow ")
+        append("call that is mostly Server time is not something the app can fix.</p>\n")
+        append("<p><b>Absent phases are blank, never zero.</b> A reused connection has no DNS ")
+        append("or TLS phase at all, which is a different fact from one that took no time. ")
+        append("Stacks other than OkHttp and HttpURLConnection cannot see these phases, so ")
+        append("their calls show a total and no breakdown rather than invented zeros.</p>\n")
+
+        append("<h4>The other numbers</h4>\n")
+        append("<ul>\n")
+        append("<li><b>Route</b> — the URL path with the variable parts replaced, so ")
+        append("<code>/users/42</code> and <code>/users/7</code> count together as ")
+        append("<code>/users/{id}</code>. Without this every id would be its own row and ")
+        append("nothing would aggregate.</li>\n")
+        append("<li><b>Failed / error rate</b> — a call that returned 4xx or 5xx, or never ")
+        append("completed at all. A 404 is a completed call with a failing status, not a ")
+        append("network error; both are counted as failures here, and the Failures section ")
+        append("separates them.</li>\n")
+        append("<li><b>Measured download</b> — bytes actually received divided by the time ")
+        append("they took to arrive. It is measured over the download only, so a slow server ")
+        append("does not drag it down. Calls whose stack cannot isolate that window are left ")
+        append("out rather than guessed at.</li>\n")
+        append("<li><b>Link speed (OS estimate)</b> — what Android reports the radio is ")
+        append("nominally capable of. It is an estimate, often wrong by a wide margin, and is ")
+        append("here only as context. Trust the measured figure above it.</li>\n")
+        append("<li><b>By network</b> — the same calls split by wifi, cellular and so on. ")
+        append("This is what separates \"the app is slow\" from \"the connection is slow\".")
+        append("</li>\n")
+        append("</ul>\n")
         append("<p>Thresholds: under ").append(esc(formatMs(report.warnThresholdMs)))
             .append(" reads as fast, over ").append(esc(formatMs(report.slowThresholdMs)))
             .append(" as slow.</p>\n")

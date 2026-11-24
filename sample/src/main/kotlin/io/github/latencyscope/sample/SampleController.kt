@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.latencyscope.core.LatencyScope
+import io.github.latencyscope.core.LatencySession
 import io.github.latencyscope.sample.net.KtorSampleClient
 import io.github.latencyscope.sample.net.OkHttpSampleClient
 import io.github.latencyscope.sample.net.SampleClient
@@ -33,6 +34,20 @@ internal class SampleController(context: Context) {
     var recording: Boolean by mutableStateOf(LatencyScope.isRecording())
         private set
 
+    /*
+     * A session can end without this screen being the one that ended it — the
+     * Stop button in the notification is the ordinary case. Reading
+     * isRecording() only inside toggleRecording() left the header saying
+     * "Recording" with a Stop button, for a session that was already over.
+     */
+    private val sessionListener = LatencyScope.SessionListener { session: LatencySession? ->
+        recording = session != null
+    }
+
+    init {
+        LatencyScope.addSessionListener(sessionListener)
+    }
+
     /** The scenario currently in flight, if any — used to disable its button. */
     var running: Scenario? by mutableStateOf(null)
         private set
@@ -47,6 +62,14 @@ internal class SampleController(context: Context) {
         tab = selected
     }
 
+    /**
+     * Stopping here does exactly what the notification's Stop does — ends the
+     * session and leaves a written report behind — because `LatencyNotification`
+     * reports on any stop, not just its own button.
+     *
+     * `recording` is not assigned here: the session listener above owns it, so
+     * there is one source of truth whichever way the session changed.
+     */
     fun toggleRecording() {
         if (LatencyScope.isRecording()) {
             LatencyScope.stop()
@@ -54,7 +77,6 @@ internal class SampleController(context: Context) {
             log.clear()
             LatencyScope.start("sample · ${tab.label}")
         }
-        recording = LatencyScope.isRecording()
     }
 
     fun mark(label: String) {
@@ -111,6 +133,7 @@ internal class SampleController(context: Context) {
     }
 
     fun close() {
+        LatencyScope.removeSessionListener(sessionListener)
         clients.values.forEach { it.close() }
         clients.clear()
     }
