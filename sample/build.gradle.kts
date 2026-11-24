@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -21,6 +22,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     buildTypes {
@@ -49,9 +54,9 @@ android {
 dependencies {
     /*
      * The wiring the README tells consumers to use: real modules in debug, the
-     * API-identical no-op in release. LatencyScopeWiring.kt is compiled into
-     * both, so a release build of this module is the proof that swapping them
-     * needs no source changes.
+     * API-identical no-op in release. Every source file in this app is compiled
+     * into both build types and none of them is written twice, so a release
+     * build is the proof that swapping them needs no source changes.
      */
     debugImplementation(project(":latencyscope-okhttp"))
     debugImplementation(project(":latencyscope-ktor"))
@@ -67,6 +72,13 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.ktor.client.cio)
     implementation(libs.volley)
+    implementation(libs.kotlinx.coroutines.android)
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.activity.compose)
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)

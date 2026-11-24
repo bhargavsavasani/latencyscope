@@ -516,11 +516,14 @@ benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
     in `onCreate`, so a `startActivity(LatencyReportActivity.intent(ctx))` left
     in release code is a no-op rather than an `ActivityNotFoundException`.
     This is the one deliberate cost — see the R8 numbers.
-  - **Verified end to end in `:sample`.** `LatencyScopeWiring.kt` compiles into
-    both build types and touches every entry point; real modules on `debug`,
-    the no-op on `release`. Debug APK: **257 LatencyScope classes**. Minified
-    release APK: **2** — the manifest-declared activities, which R8 must keep
-    because the manifest is a root. Everything else is gone.
+  - **Verified end to end in `:sample`.** Every source file of the sample
+    compiles into both build types and between them they touch every entry
+    point; real modules on `debug`, the no-op on `release`. Debug APK: **329
+    LatencyScope classes**. Minified release APK: **4** — the sample's own
+    `MainActivity` and `SampleApp`, plus the two no-op report activities, which
+    R8 must keep because the manifest is a root. Every library class is gone.
+    (Phase 7 landed this as a dedicated `LatencyScopeWiring.kt` probe; Phase 8
+    replaced it with the real app, which exercises strictly more.)
   - Two `:sample` changes were needed to make that check real. Its release
     `optimization.packageScope` omitted `io.github.**`, so R8 was leaving
     LatencyScope untouched; and `minSdk` moved 28 → 30 because
@@ -537,6 +540,35 @@ benchmark or coverage gate (Phase 9), no CI, docs or publishing (Phase 10).
 - Start/Stop recording button, `mark()` buttons for flow stages, view report in
   Compose UI + View UI, export & share.
 - **Done when:** manual run produces a correct HTML report on-device.
+- **✅ COMPLETE** — Compose app, 4 tabs × 7 scenarios, 7 unit tests, 0 lint
+  issues, both build types green. Notes:
+  - **No Retrofit dependency, deliberately.** Retrofit is a typed layer *over*
+    OkHttp and issues every call through the `OkHttpClient` it is given, so the
+    OkHttp tab already covers it exactly. Adding Retrofit would demo Retrofit,
+    not a second thing LatencyScope does.
+  - **Real endpoints, not a loopback mock.** A local server has no DNS, no TLS
+    handshake and no server think-time — it would exercise precisely the phases
+    the library exists to show. The cost is that the scenarios need network.
+  - **A 404 and a 500 are completed calls, not failures**, in all four tabs.
+    That takes work per stack: Ktor needs `expectSuccess = false`, Volley
+    delivers them through `deliverError` and the status has to be rescued from
+    `error.networkResponse`, and HttpURLConnection serves their body on
+    `errorStream` — reading `inputStream` instead throws and would record a
+    transport error that never happened.
+  - **Volley retries are turned off** (`DefaultRetryPolicy(timeout, 0, 1f)`).
+    Volley retries by default, and a silent retry puts a second recorded call
+    in the report with nothing to explain it.
+  - Clients are **built once and kept**. A fresh client per run means a cold
+    connection pool, and every call would show a TLS handshake that a real app
+    would not have paid for. They are closed in a `DisposableEffect`, which is
+    also what Phase 9's leak check will exercise.
+  - The burst uses `async`/`awaitAll` rather than a loop: pool contention only
+    appears as queue and connect time if the calls actually overlap.
+  - **Not verified:** the "correct HTML report **on-device**" half of the
+    done-when. What is verified is that both build types assemble, 198 unit
+    tests and `check` pass, lint is clean, and the release APK contains four
+    LatencyScope classes. Running the app against the live endpoints and
+    opening the exported HTML is a manual step that needs a device.
 
 ### Phase 9 — Hardening & performance
 - Overhead benchmark: 10k recorded calls vs baseline, assert added per-call cost

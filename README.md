@@ -4,10 +4,10 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-7 complete: the `latencyscope-core`
+> **Status: pre-release.** Phases 0-8 complete: the `latencyscope-core`
 > engine, all four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug
-> UIs and the API-identical no-op for release builds. Remaining: the sample
-> app, hardening and publishing.
+> UIs, the API-identical no-op for release builds and the sample app.
+> Remaining: hardening and publishing.
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
 ## Why
@@ -194,8 +194,9 @@ drop-in claim cannot quietly stop being true.
 
 With R8 enabled and your own packages in scope, what survives in a release
 build is two empty `Activity` classes — they are named in a manifest, which R8
-treats as a root. The sample's minified release APK contains 2 LatencyScope
-classes against 257 in its debug APK.
+treats as a root. The sample's minified release APK contains 4 classes under
+`io.github.latencyscope` against 329 in its debug APK — and two of the four are
+the sample's own `MainActivity` and `Application`. No library code survives.
 
 ## What each stack can see
 
@@ -208,6 +209,31 @@ classes against 257 in its debug APK.
 
 Where a phase cannot be measured it is reported as **absent**, never as zero —
 "instant" and "unknown" are different facts.
+
+## The sample app
+
+`:sample` is a Compose app with a tab per stack — OkHttp, Ktor, Volley,
+`HttpURLConnection` — and the same seven scenarios behind each: a fast GET, a
+two-second endpoint, a 404, a 500, a client-side timeout, a ~1 MB payload and a
+burst of six parallel calls. Start recording, fire a few, drop `mark()`s as you
+go, then open the report in either UI or export and share it.
+
+```bash
+./gradlew :sample:installDebug
+```
+
+It calls `https://httpbin.org` and `https://jsonplaceholder.typicode.com`, so it
+needs network. Those are real endpoints on purpose: a loopback mock has no DNS,
+no TLS handshake and no server think-time, which is most of what the report is
+for.
+
+Retrofit has no tab because it does not need one — it issues every call through
+the `OkHttpClient` you hand it, so `installLatencyScope()` on that client is all
+there is to it, and the OkHttp tab is already showing you the result.
+
+The app is also the no-op's proof: nothing in it branches on the build type, and
+the release variant compiles against `latencyscope-noop` instead of the real
+modules without a line changing.
 
 ## Build
 
