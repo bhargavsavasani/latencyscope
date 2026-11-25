@@ -27,8 +27,7 @@ class LatencyConfigBuilderTest {
 
         assertEquals(defaults.maxRecords, built.maxRecords)
         assertEquals(defaults.captureQueryParams, built.captureQueryParams)
-        assertEquals(defaults.warnThresholdMs, built.warnThresholdMs)
-        assertEquals(defaults.slowThresholdMs, built.slowThresholdMs)
+        assertEquals(defaults.ratingScale, built.ratingScale)
         assertEquals(defaults.autoStart, built.autoStart)
         assertTrue("the default filter accepts everything", built.urlFilter("https://anything"))
     }
@@ -41,8 +40,7 @@ class LatencyConfigBuilderTest {
             .maxRecords(17)
             .captureQueryParams(true)
             .routeNormalizer(normalizer)
-            .warnThresholdMs(111)
-            .slowThresholdMs(222)
+            .ratingScale(LatencyRatingScale(100, 200, 300, 400))
             .autoStart(true)
             .urlFilter { url -> url.contains("keep") }
             .build()
@@ -50,8 +48,7 @@ class LatencyConfigBuilderTest {
         assertEquals(17, config.maxRecords)
         assertTrue(config.captureQueryParams)
         assertSame(normalizer, config.routeNormalizer)
-        assertEquals(111, config.warnThresholdMs)
-        assertEquals(222, config.slowThresholdMs)
+        assertEquals(LatencyRatingScale(100, 200, 300, 400), config.ratingScale)
         assertTrue(config.autoStart)
         assertTrue(config.urlFilter("https://host/keep"))
         assertFalse(config.urlFilter("https://host/drop"))

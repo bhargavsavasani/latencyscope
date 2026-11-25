@@ -14,8 +14,7 @@ public object Aggregator {
     @JvmOverloads
     public fun aggregate(
         session: LatencySession,
-        warnThresholdMs: Long = LatencyConfig.DEFAULT_WARN_THRESHOLD_MS,
-        slowThresholdMs: Long = LatencyConfig.DEFAULT_SLOW_THRESHOLD_MS,
+        ratingScale: LatencyRatingScale = LatencyRatingScale(),
         generatedAtEpochMs: Long = System.currentTimeMillis(),
     ): LatencyReport {
         val records = session.records
@@ -68,8 +67,7 @@ public object Aggregator {
             hosts = hosts,
             networks = networks,
             errors = errors,
-            warnThresholdMs = warnThresholdMs,
-            slowThresholdMs = slowThresholdMs,
+            ratingScale = ratingScale,
             generatedAtEpochMs = generatedAtEpochMs,
         )
     }

@@ -63,8 +63,7 @@ public data class LatencyConfig(
     public val maxRecords: Int = DEFAULT_MAX_RECORDS,
     public val captureQueryParams: Boolean = false,
     public val routeNormalizer: RouteNormalizer = DefaultRouteNormalizer(),
-    public val warnThresholdMs: Long = DEFAULT_WARN_THRESHOLD_MS,
-    public val slowThresholdMs: Long = DEFAULT_SLOW_THRESHOLD_MS,
+    public val ratingScale: LatencyRatingScale = LatencyRatingScale(),
     public val autoStart: Boolean = false,
     public val urlFilter: (String) -> Boolean = { true },
 ) {
@@ -78,11 +77,8 @@ public data class LatencyConfig(
         public fun routeNormalizer(value: RouteNormalizer): Builder = apply {
             config = config.copy(routeNormalizer = value)
         }
-        public fun warnThresholdMs(value: Long): Builder = apply {
-            config = config.copy(warnThresholdMs = value)
-        }
-        public fun slowThresholdMs(value: Long): Builder = apply {
-            config = config.copy(slowThresholdMs = value)
+        public fun ratingScale(value: LatencyRatingScale): Builder = apply {
+            config = config.copy(ratingScale = value)
         }
         public fun autoStart(value: Boolean): Builder = apply { config = config.copy(autoStart = value) }
         public fun urlFilter(value: (String) -> Boolean): Builder = apply {
@@ -94,8 +90,7 @@ public data class LatencyConfig(
 
     public companion object {
         public const val DEFAULT_MAX_RECORDS: Int = 5_000
-        public const val DEFAULT_WARN_THRESHOLD_MS: Long = 300
-        public const val DEFAULT_SLOW_THRESHOLD_MS: Long = 1_000
+
     }
 }
 
@@ -112,8 +107,7 @@ public object Aggregator {
     @JvmOverloads
     public fun aggregate(
         session: LatencySession,
-        warnThresholdMs: Long = LatencyConfig.DEFAULT_WARN_THRESHOLD_MS,
-        slowThresholdMs: Long = LatencyConfig.DEFAULT_SLOW_THRESHOLD_MS,
+        ratingScale: LatencyRatingScale = LatencyRatingScale(),
         generatedAtEpochMs: Long = 0,
     ): LatencyReport = LatencyReport(
         session = session,
@@ -122,8 +116,7 @@ public object Aggregator {
         hosts = emptyList(),
         networks = emptyList(),
         errors = emptyList(),
-        warnThresholdMs = warnThresholdMs,
-        slowThresholdMs = slowThresholdMs,
+        ratingScale = ratingScale,
         generatedAtEpochMs = generatedAtEpochMs,
     )
 

@@ -130,6 +130,15 @@ public object LatencyFormat {
     @JvmStatic
     public fun band(report: LatencyReport, ms: Long): LatencyBand = LatencyBand.FAST
 
+    @JvmStatic
+    public fun rating(report: LatencyReport, ms: Long): LatencyRating = LatencyRating.EXCELLENT
+
+    @JvmStatic
+    public fun verdict(report: LatencyReport): LatencyRating = LatencyRating.EXCELLENT
+
+    @JvmStatic
+    public fun scaleSummary(report: LatencyReport): String = ""
+
     private const val MILLIS_PER_SECOND = 1_000L
 }
 
@@ -138,6 +147,19 @@ public enum class LatencyBand(public val label: String) {
     FAST("fast"),
     WARN("borderline"),
     SLOW("slow"),
+}
+
+/** Mirror of the real [LatencyRating]. Same shape, never consulted. */
+public enum class LatencyRating(
+    public val label: String,
+    public val advice: String,
+    public val band: LatencyBand,
+) {
+    EXCELLENT("Excellent", "", LatencyBand.FAST),
+    GOOD("Good", "", LatencyBand.FAST),
+    ACCEPTABLE("Acceptable", "", LatencyBand.WARN),
+    SLOW("Slow", "", LatencyBand.WARN),
+    POOR("Poor", "", LatencyBand.SLOW),
 }
 
 /** Mirror of the real [PhaseSlice]. */

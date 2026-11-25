@@ -870,6 +870,34 @@ Two tests, both failing against the old code: one press reaches a finished
 report on its own and the row is never blank in between, and three presses in
 a row leave one report and one intact notification.
 
+### A report that says whether the numbers are good
+
+A reader looked at "p95: 1,420 ms", could not tell whether that was fine, and
+went to search for a yardstick — finding one that disagreed with the report's
+own colours. That is the whole problem: the report presented evidence and left
+the judgement to someone who had no scale to judge against.
+
+| Change | Why |
+|---|---|
+| **One rating scale, five bands** | `LatencyRatingScale` (200 / 500 / 1s / 2s) replaces the old `warnThresholdMs` / `slowThresholdMs` pair. Those two could only ever make three bands, and 300 ms as "warn" silently disagreed with the scale commonly published for API response times |
+| **Colour derives from the rating** | `band()` is now `rating().band` — five verdicts grouped into three colours. They cannot drift apart, because there is only one judgement in the library |
+| **The scale is printed in the report** | A reader who looks the numbers up should find agreement, not a contradiction. The scale travels in the JSON too, so a consumer judges by the same yardstick |
+| **A verdict section, first thing in the document** | The rating in words, what it means, the route worth looking at first, and — from the dominant phase — what kind of problem it is. Backend time and connection setup look identical in a total and go to different teams |
+| **An average tile** | Asked for, and added. Immediately followed by why the verdict is *not* based on it: 99 calls at 150 ms plus one 8-second hang averages to a healthy-looking 228 ms while one user in a hundred waited eight seconds |
+| **Theme switch moved** | It sat in the content flow under the header. It is chrome, so it is now an icon pinned top-right, with both icons shipped and CSS showing the right one — swapping them in script would leave the wrong one for anyone reading with JavaScript off. Hidden when printing |
+
+The verdict deliberately refuses to name a culprit when there is not one: a
+route needs at least three calls before it can be blamed (one unlucky call is
+an anecdote), and a session whose worst repeated route is excellent is told
+there is nothing to look at rather than handed a scapegoat.
+
+**A flaky test fixed on the way through.** `RecordingCostTest` compares
+per-call cost at two session sizes, and a clean parallel build starved it
+enough to report 13× growth on code that had not changed. It now takes the
+fastest of three samples per size: contention only ever *adds* time, so the
+quickest run is the closest reading of what the code costs. It passes under
+the same parallel load that broke it.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

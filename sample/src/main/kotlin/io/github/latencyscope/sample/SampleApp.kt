@@ -32,8 +32,8 @@ internal class SampleApp : Application() {
                 // The sample's burst scenario reuses six distinct paths; keeping
                 // query params off means they still collapse into one route.
                 captureQueryParams = false,
-                warnThresholdMs = 500,
-                slowThresholdMs = 1_500,
+                // The published defaults — 200 / 500 / 1s / 2s — so the
+                // report agrees with whatever a reader looks up.
             ),
         )
     }

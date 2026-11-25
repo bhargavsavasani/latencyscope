@@ -34,8 +34,13 @@ class RecordingCostTest {
 
     @Test
     fun perCallCostDoesNotGrowWithSessionLength() {
-        val small = nanosPerCall(SMALL)
-        val large = nanosPerCall(LARGE)
+        // Best of several, not one shot. A machine compiling other modules in
+        // parallel can make any single run arbitrarily slow, and that noise
+        // only ever adds time — so the fastest run is the closest reading of
+        // what the code actually costs. Taking one sample made this fail on a
+        // busy machine while the code was fine.
+        val small = fastestNanosPerCall(SMALL)
+        val large = fastestNanosPerCall(LARGE)
 
         // LARGE is 10x SMALL, so anything quadratic lands at ~10x here.
         val ratio = large / small
@@ -59,6 +64,9 @@ class RecordingCostTest {
         assertTrue("kept ${session.records.size} with a cap of $CAP", session.records.size <= CAP)
         assertTrue("dropped records must be counted, not lost silently", session.droppedCount > 0)
     }
+
+    private fun fastestNanosPerCall(calls: Int): Double =
+        (1..SAMPLES).minOf { nanosPerCall(calls) }
 
     private fun nanosPerCall(calls: Int): Double {
         // A cap above the call count keeps trimming out of the measurement:
@@ -103,5 +111,8 @@ class RecordingCostTest {
          * constant-time loop look linear by a factor of four.
          */
         const val MAX_GROWTH = 4.0
+
+        /** Enough to shrug off a scheduling hiccup, few enough to stay quick. */
+        const val SAMPLES = 3
     }
 }

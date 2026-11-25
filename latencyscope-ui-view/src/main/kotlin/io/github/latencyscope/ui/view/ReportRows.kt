@@ -170,9 +170,8 @@ internal object ReportRows {
     private fun methodology(report: LatencyReport): String =
         "Percentiles are exact, nearest rank — p95 is a duration some call actually took. " +
             "Server is the gap between the request being fully sent and the first response " +
-            "byte. Absent phases are omitted, never shown as zero. Under " +
-            LatencyFormat.duration(report.warnThresholdMs) + " reads as fast, over " +
-            LatencyFormat.duration(report.slowThresholdMs) + " as slow."
+            "byte. Absent phases are omitted, never shown as zero. " +
+            LatencyFormat.scaleSummary(report)
 
     private fun ReportRow.Entry.matches(query: String): Boolean {
         if (query.isBlank()) return true

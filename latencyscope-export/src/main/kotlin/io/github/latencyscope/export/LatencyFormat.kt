@@ -40,12 +40,54 @@ public object LatencyFormat {
         return if (value < 1) "<1%" else trim(value) + "%"
     }
 
-    /** Which latency band a duration falls into, for colour *and* for wording. */
+    /**
+     * How a duration rates against the report's scale.
+     *
+     * This is the single judgement in the library. [band] is this grouped
+     * into three colours, so a cell's colour can never disagree with the word
+     * printed next to it.
+     */
     @JvmStatic
-    public fun band(report: LatencyReport, ms: Long): LatencyBand = when {
-        ms >= report.slowThresholdMs -> LatencyBand.SLOW
-        ms >= report.warnThresholdMs -> LatencyBand.WARN
-        else -> LatencyBand.FAST
+    public fun rating(report: LatencyReport, ms: Long): LatencyRating {
+        val scale = report.ratingScale
+        return when {
+            ms < scale.excellentUnderMs -> LatencyRating.EXCELLENT
+            ms < scale.goodUnderMs -> LatencyRating.GOOD
+            ms < scale.acceptableUnderMs -> LatencyRating.ACCEPTABLE
+            ms < scale.slowUnderMs -> LatencyRating.SLOW
+            else -> LatencyRating.POOR
+        }
+    }
+
+    /** The colour band a duration falls into — [rating], grouped into three. */
+    @JvmStatic
+    public fun band(report: LatencyReport, ms: Long): LatencyBand = rating(report, ms).band
+
+    /**
+     * The report's verdict: how its p95 rates.
+     *
+     * p95 and not the average, because an average hides the tail it is most
+     * important to see — ninety-nine fast calls and one eight-second hang
+     * average out to something that reads as healthy.
+     */
+    @JvmStatic
+    public fun verdict(report: LatencyReport): LatencyRating =
+        rating(report, report.overall.p95Ms)
+
+    /**
+     * The rating scale in one line, for a screen with no room for a table.
+     *
+     * Shared so every surface quotes the same boundaries; a report that rates
+     * against one scale and explains another is worse than one that explains
+     * nothing.
+     */
+    @JvmStatic
+    public fun scaleSummary(report: LatencyReport): String {
+        val scale = report.ratingScale
+        return "Rated on p95 — under " + duration(scale.excellentUnderMs) + " excellent, " +
+            "under " + duration(scale.goodUnderMs) + " good, " +
+            "under " + duration(scale.acceptableUnderMs) + " acceptable, " +
+            "under " + duration(scale.slowUnderMs) + " slow, above that poor."
     }
 
     private fun trim(value: Double): String {
@@ -64,6 +106,31 @@ public enum class LatencyBand(public val label: String) {
     FAST("fast"),
     WARN("borderline"),
     SLOW("slow"),
+}
+
+/**
+ * The verdict on one duration, in words anyone can act on.
+ *
+ * The five steps are the scale commonly published for API response times —
+ * see [LatencyRatingScale]. Printing the verdict rather than only a number is
+ * the difference between a report someone reads and a report someone *uses*:
+ * "1.4 s" means nothing without a yardstick, and a reader who has to go and
+ * find one elsewhere will find one that disagrees.
+ *
+ * @property label the verdict itself, e.g. "Good"
+ * @property advice what it means for the person reading
+ * @property band the colour this verdict is drawn in
+ */
+public enum class LatencyRating(
+    public val label: String,
+    public val advice: String,
+    public val band: LatencyBand,
+) {
+    EXCELLENT("Excellent", "Feels instant.", LatencyBand.FAST),
+    GOOD("Good", "Comfortable — no action needed.", LatencyBand.FAST),
+    ACCEPTABLE("Acceptable", "Usable, but worth keeping an eye on.", LatencyBand.WARN),
+    SLOW("Slow", "Noticeable to users. Worth investigating.", LatencyBand.WARN),
+    POOR("Poor", "Users will feel this and may give up.", LatencyBand.SLOW),
 }
 
 /**

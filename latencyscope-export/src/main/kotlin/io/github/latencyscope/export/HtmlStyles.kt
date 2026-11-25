@@ -87,6 +87,8 @@ internal const val REPORT_CSS: String = """
 * { box-sizing: border-box; }
 
 body {
+  /* The theme switch is positioned against this. */
+  position: relative;
   margin: 0;
   padding: 0 16px 64px;
   background: var(--surface-0);
@@ -164,6 +166,85 @@ td.num { font-variant-numeric: tabular-nums; }
 .method { min-width: 46px; text-align: center; }
 
 .lat { font-variant-numeric: tabular-nums; }
+/* ----------------------------------------------------------- the verdict */
+
+/*
+ * The first thing in the document, and deliberately loud: a reader who stops
+ * here should still come away knowing whether anything needs attention.
+ */
+.verdict {
+  border: 1px solid var(--border);
+  border-left: 5px solid currentColor;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin: 20px 0 24px;
+  background: var(--surface);
+}
+.verdict-label {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.verdict-headline {
+  margin: 4px 0 0;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  border: 0;
+  padding: 0;
+}
+.verdict-advice { margin: 4px 0 0; font-size: 15px; }
+.verdict-basis,
+.verdict-errors { margin: 10px 0 0; font-size: 13px; color: var(--text-secondary); }
+.verdict-action {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  color: var(--text-primary);
+}
+.verdict-action p { margin: 0 0 6px; font-size: 14px; }
+.verdict-action p:last-child { margin-bottom: 0; color: var(--text-secondary); }
+
+/* The published scale, printed in the report so nobody has to look it up. */
+.scale { width: auto; min-width: min(100%, 520px); margin: 12px 0 16px; }
+.scale td, .scale th { padding: 7px 14px 7px 0; }
+
+/* ------------------------------------------------------- the theme switch */
+
+/*
+ * Chrome, not content: pinned top-right where a reader already looks for it,
+ * instead of sitting in the flow underneath the header.
+ */
+.theme-toggle {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.theme-toggle:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Show the icon for the theme you would switch *to*. */
+.icon-moon { display: inline; }
+.icon-sun { display: none; }
+:root[data-theme="dark"] .icon-moon { display: none; }
+:root[data-theme="dark"] .icon-sun { display: inline; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .icon-moon { display: none; }
+  :root:not([data-theme="light"]) .icon-sun { display: inline; }
+}
+@media print { .theme-toggle { display: none; } }
+
 .lat-good { color: var(--status-good-text); }
 .lat-warn { color: var(--status-warning-text); }
 .lat-slow { color: var(--status-critical-text); font-weight: 650; }

@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 252 tests, 0 lint issues.
+> sample app and the hardening pass. 262 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -446,6 +446,47 @@ Text in the exports is treated as hostile. Recorded URLs, routes and `mark()`
 labels are escaped for the context they land in, including the double decode a
 tooltip attribute goes through, and CSV cells that begin with `=`, `+`, `-` or
 `@` are quoted so a spreadsheet shows them instead of executing them.
+
+### It tells you whether the numbers are good
+
+The report opens with a verdict in words, not a table:
+
+```
+OVERALL
+Slow
+Noticeable to users. Worth investigating.
+
+Judged on p95 = 1.4 s — 19 of every 20 calls were faster than that.
+A typical call took 180 ms, and the average was 240 ms.
+
+Where to look first: GET /checkout — 1.8 s at p95 (slow), over 6 calls.
+94% of the time is Server. The server is doing the waiting. This is a
+backend question, not something the app can fix.
+```
+
+That last line is the part that saves an argument: backend time and
+connection setup look identical in a total and go to completely different
+people, so the report says which it is.
+
+Ratings use the scale commonly published for API response times — **under
+200 ms** excellent, **500 ms** good, **1 s** acceptable, **2 s** slow, above
+that poor — and the report prints the scale, so a reader who looks the
+numbers up finds them agreeing rather than contradicting.
+
+Two things worth knowing about how to read it:
+
+- **The verdict is on p95, not the average.** Ninety-nine calls at 150 ms and
+  one that hangs for 8 seconds average out to 228 ms, which reads as healthy
+  while one person in a hundred watched a spinner for eight seconds. The
+  average is shown — it is the number people expect — and immediately
+  qualified.
+- **These ratings describe a whole round trip from the phone.** Published
+  figures for a *backend* are stricter, because they exclude the radio, DNS
+  and TLS the device pays for first. Compare those against the report's
+  **Server** column, not the total.
+
+Change the scale with `LatencyConfig(ratingScale = LatencyRatingScale(...))`;
+the report always prints whichever one it was rated against.
 
 ### It explains its own numbers
 

@@ -253,12 +253,26 @@ public data class LatencyReport(
     public val hosts: List<HostStats>,
     public val networks: List<NetworkStats>,
     public val errors: List<ErrorGroup>,
-    public val warnThresholdMs: Long,
-    public val slowThresholdMs: Long,
+    public val ratingScale: LatencyRatingScale,
     public val generatedAtEpochMs: Long,
 ) {
     public val slowestRoute: RouteStats? get() = null
     public val heaviestRoute: RouteStats? get() = null
     public val hasPhaseData: Boolean get() = false
     public val throughputBytesPerSecond: Double? get() = null
+}
+
+/** Mirror of the real [LatencyRatingScale]. Same shape, never consulted. */
+public data class LatencyRatingScale(
+    public val excellentUnderMs: Long = DEFAULT_EXCELLENT_UNDER_MS,
+    public val goodUnderMs: Long = DEFAULT_GOOD_UNDER_MS,
+    public val acceptableUnderMs: Long = DEFAULT_ACCEPTABLE_UNDER_MS,
+    public val slowUnderMs: Long = DEFAULT_SLOW_UNDER_MS,
+) {
+    public companion object {
+        public const val DEFAULT_EXCELLENT_UNDER_MS: Long = 200
+        public const val DEFAULT_GOOD_UNDER_MS: Long = 500
+        public const val DEFAULT_ACCEPTABLE_UNDER_MS: Long = 1_000
+        public const val DEFAULT_SLOW_UNDER_MS: Long = 2_000
+    }
 }

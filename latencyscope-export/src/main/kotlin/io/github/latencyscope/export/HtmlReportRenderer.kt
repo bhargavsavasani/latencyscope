@@ -42,6 +42,32 @@ internal object HtmlReportRenderer {
 
     private val PERCENTILE_ORDER = listOf("p50", "p75", "p90", "p95", "p99")
 
+    /** One unlucky call is an anecdote; blaming a route on it wastes a reader's time. */
+    /*
+     * Both icons ship in the page and CSS shows whichever matches the current
+     * theme. Swapping them in script would leave the wrong one visible for
+     * anyone reading with JavaScript off, and the report is meant to survive
+     * that.
+     */
+    private const val THEME_ICON_SUN =
+        "<svg class=\"icon-sun\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" " +
+            "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
+            "stroke-linecap=\"round\" aria-hidden=\"true\">" +
+            "<circle cx=\"12\" cy=\"12\" r=\"4\"/>" +
+            "<path d=\"M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4" +
+            "M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4\"/></svg>"
+
+    private const val THEME_ICON_MOON =
+        "<svg class=\"icon-moon\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" " +
+            "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" " +
+            "stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" +
+            "<path d=\"M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z\"/></svg>"
+
+    private const val MIN_CALLS_TO_BLAME = 3
+
+    /** How much of a call one stage must own before it is called the cause. */
+    private const val DOMINANT_PHASE_SHARE = 0.5
+
     private const val MAX_WATERFALL_ROWS = 400
     private const val MAX_CALL_ROWS = 1_000
     private const val MAX_HISTOGRAM_ROUTES = 12
@@ -57,6 +83,7 @@ internal object HtmlReportRenderer {
         html.append("</head>\n<body>\n<div class=\"wrap\">\n")
 
         html.appendHeader(report)
+        html.appendVerdict(report)
         html.appendTiles(report)
         html.appendRoutes(report)
         html.appendPhases(report)
@@ -113,8 +140,16 @@ internal object HtmlReportRenderer {
         }
         append("</div>\n")
 
+        // Pinned to the top-right of the page rather than sitting in the flow
+        // below the header: it is chrome, not content, and it belongs where a
+        // reader already expects a theme switch to be.
+        append("<button id=\"theme-toggle\" type=\"button\" class=\"theme-toggle\" ")
+        append("title=\"Switch between light and dark\" ")
+        append("aria-label=\"Switch between light and dark\">")
+        append(THEME_ICON_SUN)
+        append(THEME_ICON_MOON)
+        append("</button>")
         append("<div class=\"controls\" style=\"margin-top:16px\">")
-        append("<button id=\"theme-toggle\" type=\"button\">Toggle theme</button>")
         append("</div>\n")
 
         if (session.isTruncated) {
@@ -134,6 +169,107 @@ internal object HtmlReportRenderer {
 
     // ----------------------------------------------------------------- tiles
 
+    /**
+     * The plain-language answer, before any table.
+     *
+     * A reader who is not an engineer cannot act on "p95: 1,420 ms". They can
+     * act on "Slow — noticeable to users", followed by which endpoint is
+     * responsible and what kind of problem it is. Everything below this
+     * section is the evidence for it.
+     */
+    private fun StringBuilder.appendVerdict(report: LatencyReport) {
+        val overall = report.overall
+        if (overall.count == 0) return
+
+        val rating = LatencyFormat.rating(report, overall.p95Ms)
+
+        append("<section class=\"verdict ").append(latencyClassFor(rating)).append("\">\n")
+        append("<p class=\"verdict-label\">Overall</p>\n")
+        append("<h2 class=\"verdict-headline\">").append(esc(rating.label)).append("</h2>\n")
+        append("<p class=\"verdict-advice\">").append(esc(rating.advice)).append("</p>\n")
+
+        append("<p class=\"verdict-basis\">")
+        append("Judged on <b>p95 = ").append(esc(formatMs(overall.p95Ms))).append("</b> — ")
+        append("19 of every 20 calls were faster than that. A typical call took ")
+        append(esc(formatMs(overall.p50Ms))).append(", and the average was ")
+        append(esc(formatMs(overall.avgMs.toLong()))).append(".")
+        append("</p>\n")
+
+        worstRoute(report)?.let { route ->
+            val routeRating = LatencyFormat.rating(report, route.stats.p95Ms)
+            append("<div class=\"verdict-action\">\n")
+            append("<p><b>Where to look first:</b> <code>").append(esc(route.key))
+                .append("</code> — ").append(esc(formatMs(route.stats.p95Ms)))
+                .append(" at p95 (").append(esc(routeRating.label.lowercase(Locale.US)))
+                .append("), over ").append(route.stats.count)
+                .append(if (route.stats.count == 1) " call." else " calls.")
+            append("</p>\n")
+            append("<p>").append(esc(diagnose(route))).append("</p>\n")
+            append("</div>\n")
+        }
+
+        if (overall.errorCount > 0) {
+            append("<p class=\"verdict-errors\">")
+                .append(overall.errorCount)
+                .append(if (overall.errorCount == 1) " call failed (" else " calls failed (")
+                .append(esc(formatPercent(overall.errorRate)))
+                .append("). See <b>Failures</b> below.</p>\n")
+        }
+        append("</section>\n")
+    }
+
+    /**
+     * The route most worth someone's attention.
+     *
+     * Slowest at p95 among routes called enough times to mean anything — a
+     * single unlucky call is an anecdote, not a pattern, and pointing a
+     * reader at one wastes their time.
+     */
+    private fun worstRoute(report: LatencyReport): RouteStats? {
+        val repeated = report.routes.filter { it.stats.count >= MIN_CALLS_TO_BLAME }
+        val candidates = repeated.ifEmpty { report.routes }
+        return candidates.maxByOrNull { it.stats.p95Ms }
+            ?.takeIf { LatencyFormat.rating(report, it.stats.p95Ms) != LatencyRating.EXCELLENT }
+    }
+
+    /**
+     * Names the cause in words, from the phase that dominates.
+     *
+     * This is the step that turns a measurement into something a reader can
+     * hand to the right person: backend time and connection setup look
+     * identical in a total, and they go to completely different teams.
+     */
+    private fun diagnose(route: RouteStats): String {
+        val phases = route.stats.phaseAverages
+        val slices = PhaseBreakdown.nonEmpty(phases)
+        val total = PhaseBreakdown.total(phases)
+        if (slices.isEmpty() || total <= 0) {
+            return "This stack cannot break a call into phases, so the cause is not " +
+                "visible here. The OkHttp and HttpURLConnection tabs can show it."
+        }
+
+        val worst = slices.maxByOrNull { it.ms } ?: return ""
+        val share = worst.ms.toDouble() / total
+        if (share < DOMINANT_PHASE_SHARE) {
+            return "No single stage dominates — the time is spread across the call. " +
+                "See the phase breakdown below."
+        }
+
+        val cause = when (worst.label) {
+            "Server" -> "The server is doing the waiting. This is a backend question, " +
+                "not something the app can fix."
+            "Connect" -> "Most of it is setting up the connection — DNS, TCP and TLS. " +
+                "Reusing connections, or warming one before the screen opens, is what helps."
+            "Response" -> "Most of it is downloading the response. A smaller payload, or " +
+                "compression, is the lever."
+            "Request" -> "Most of it is uploading the request body."
+            "Wait" -> "Most of it is spent queued before the call even starts — the " +
+                "connection pool or dispatcher is the bottleneck, not the network."
+            else -> "The " + worst.label + " stage dominates."
+        }
+        return formatPercent(share) + " of the time is " + worst.label + ". " + cause
+    }
+
     private fun StringBuilder.appendTiles(report: LatencyReport) {
         val overall = report.overall
         append("<section>\n<h2>Summary</h2>\n")
@@ -147,6 +283,11 @@ internal object HtmlReportRenderer {
             formatPercent(overall.errorRate) + " of all calls",
         )
         tile("Typical call (p50)", formatMs(overall.p50Ms), "half of all calls were faster than this")
+        tile(
+            "Average call",
+            formatMs(overall.avgMs.toLong()),
+            "every call added up, divided by " + overall.count + " — see note below",
+        )
         tile("Slow call (p95)", formatMs(overall.p95Ms), "1 call in 20 was slower than this")
         tile("Worst case (p99)", formatMs(overall.p99Ms), "1 call in 100 was slower; worst was " + formatMs(overall.maxMs))
         tile(
@@ -600,6 +741,35 @@ internal object HtmlReportRenderer {
         append("<dt>").append(esc(key)).append("</dt><dd>").append(esc(value)).append("</dd>\n")
     }
 
+    /** The rating scale, printed so nobody has to go and look one up. */
+    private fun StringBuilder.appendScaleTable(report: LatencyReport) {
+        val scale = report.ratingScale
+        val rows = listOf(
+            LatencyRating.EXCELLENT to "under " + formatMs(scale.excellentUnderMs),
+            LatencyRating.GOOD to formatMs(scale.excellentUnderMs) + " – " + formatMs(scale.goodUnderMs),
+            LatencyRating.ACCEPTABLE to formatMs(scale.goodUnderMs) + " – " + formatMs(scale.acceptableUnderMs),
+            LatencyRating.SLOW to formatMs(scale.acceptableUnderMs) + " – " + formatMs(scale.slowUnderMs),
+            LatencyRating.POOR to "over " + formatMs(scale.slowUnderMs),
+        )
+        append("<table class=\"scale\">\n<thead><tr>")
+        append("<th class=\"left\">Time</th><th class=\"left\">Rating</th>")
+        append("<th class=\"left\">What it means</th>")
+        append("</tr></thead>\n<tbody>\n")
+        rows.forEach { (rating, range) ->
+            append("<tr><td class=\"left\">").append(esc(range)).append("</td>")
+            append("<td class=\"left ").append(latencyClassFor(rating)).append("\">")
+                .append(esc(rating.label)).append("</td>")
+            append("<td class=\"left\">").append(esc(rating.advice)).append("</td></tr>\n")
+        }
+        append("</tbody></table>\n")
+    }
+
+    private fun latencyClassFor(rating: LatencyRating): String = when (rating.band) {
+        LatencyBand.SLOW -> "lat-slow"
+        LatencyBand.WARN -> "lat-warn"
+        LatencyBand.FAST -> "lat-good"
+    }
+
     // ---------------------------------------------------------------- footer
 
     private fun StringBuilder.appendFooter(report: LatencyReport) {
@@ -616,10 +786,16 @@ internal object HtmlReportRenderer {
                 .append(esc(PERCENTILE_MEANINGS.getValue(key))).append("</li>\n")
         }
         append("</ul>\n")
-        append("<p>An <b>average</b> is not here on purpose. One 8-second timeout among a ")
-        append("hundred fast calls barely moves an average, while it is exactly the ")
-        append("experience a user complains about. Percentiles keep it visible: watch p95 ")
-        append("and p99 for the calls that hurt, p50 for the everyday case.</p>\n")
+        append("<h4>Why the verdict uses p95 and not the average</h4>\n")
+        append("<p>The average is shown because it is the number people expect, but it is ")
+        append("not what the report is judged on, and it is worth knowing why. Take a ")
+        append("hundred calls: ninety-nine at 150 ms and one that hung for 8 seconds. The ")
+        append("average is 228 ms, which reads as perfectly healthy — while one person in ")
+        append("a hundred sat watching a spinner for eight seconds. The average hid them; ")
+        append("p95 and p99 do not.</p>\n")
+        append("<p>So: read <b>p50</b> for the ordinary day, <b>p95</b> for the verdict, ")
+        append("and <b>p99</b> for the worst your users actually meet. Treat the average ")
+        append("as context, never as the answer.</p>\n")
         append("<p>They are exact and use nearest rank: p95 is a duration some call really ")
         append("took, not an interpolated value no request ever saw.</p>\n")
         append("<h4>Where a call's time goes</h4>\n")
@@ -662,9 +838,17 @@ internal object HtmlReportRenderer {
         append("This is what separates \"the app is slow\" from \"the connection is slow\".")
         append("</li>\n")
         append("</ul>\n")
-        append("<p>Thresholds: under ").append(esc(formatMs(report.warnThresholdMs)))
-            .append(" reads as fast, over ").append(esc(formatMs(report.slowThresholdMs)))
-            .append(" as slow.</p>\n")
+        append("<h4>The rating scale</h4>\n")
+        append("<p>Every duration in this report is rated against the scale below, which ")
+        append("is the one commonly published for API response times. The colours are the ")
+        append("same five ratings grouped into three, so a colour never disagrees with a ")
+        append("word.</p>\n")
+        appendScaleTable(report)
+        append("<p>These describe a <b>whole round trip from the device</b> — what the ")
+        append("person using the app actually waits through. Published figures for a ")
+        append("<i>backend</i> are usually stricter, because they leave out the radio, DNS ")
+        append("and TLS the phone pays for first. Compare those against the <b>Server</b> ")
+        append("column, not the total.</p>\n")
         append("<p>Generated ").append(esc(formatTimestamp(report.generatedAtEpochMs)))
             .append(" by LatencyScope ").append(esc(report.session.device.libraryVersion))
             .append(". Session id ").append(esc(report.session.id)).append(".</p>\n")

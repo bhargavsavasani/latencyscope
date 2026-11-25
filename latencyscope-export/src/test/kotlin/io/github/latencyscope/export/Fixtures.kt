@@ -95,7 +95,5 @@ internal fun report(
         droppedCount = droppedCount,
         startedAtEpochMs = startedAtEpochMs,
     ),
-    warnThresholdMs = 300,
-    slowThresholdMs = 1_000,
     generatedAtEpochMs = 1_700_000_005_000,
 )

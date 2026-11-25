@@ -88,8 +88,8 @@ public data class LatencyReport(
     /** Per-transport breakdown, busiest first. Empty when no call recorded one. */
     public val networks: List<NetworkStats>,
     public val errors: List<ErrorGroup>,
-    public val warnThresholdMs: Long,
-    public val slowThresholdMs: Long,
+    /** The scale this report's wording and colours are rated against. */
+    public val ratingScale: LatencyRatingScale,
     public val generatedAtEpochMs: Long,
 ) {
     public val slowestRoute: RouteStats?

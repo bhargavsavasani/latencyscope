@@ -211,8 +211,6 @@ class LatencyReportScreenTest {
             records = records,
             droppedCount = droppedCount,
         ),
-        warnThresholdMs = 300,
-        slowThresholdMs = 1_000,
         generatedAtEpochMs = 1_700_000_005_000,
     )
 }

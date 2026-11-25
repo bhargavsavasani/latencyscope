@@ -27,7 +27,14 @@ class ReportJsonTest {
         assertEquals(2, json.getJSONObject("overall").getInt("count"))
         assertEquals(2, json.getJSONArray("routes").length())
         assertEquals(2, json.getJSONArray("calls").length())
-        assertEquals(300, json.getJSONObject("thresholds").getInt("warnMs"))
+        // The scale the report rates against travels with it, so a consumer
+        // reading the JSON judges by the same yardstick the HTML printed.
+        val scale = json.getJSONObject("ratingScale")
+        assertEquals(200, scale.getInt("excellentUnderMs"))
+        assertEquals(500, scale.getInt("goodUnderMs"))
+        assertEquals(1_000, scale.getInt("acceptableUnderMs"))
+        assertEquals(2_000, scale.getInt("slowUnderMs"))
+        assertTrue(json.has("verdict"))
     }
 
     @Test

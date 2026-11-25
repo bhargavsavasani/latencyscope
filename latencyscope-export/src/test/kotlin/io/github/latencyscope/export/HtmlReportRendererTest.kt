@@ -5,6 +5,7 @@ import io.github.latencyscope.core.Source
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import io.github.latencyscope.core.Phases
 import org.junit.Test
 
 class HtmlReportRendererTest {
@@ -302,5 +303,169 @@ class HtmlReportRendererTest {
         val html = LatencyExport.toHtml(report(records = listOf(call(totalMs = 100))))
 
         assertTrue(html.contains("data-key=\"p95\" data-tip="))
+    }
+
+    // ------------------------------------------------------------- verdict
+
+    /**
+     * The report has to answer its own question.
+     *
+     * Someone who is not an engineer cannot act on "p95: 1,420 ms". They can
+     * act on a word, the endpoint responsible, and what kind of problem it is.
+     */
+    @Test
+    fun theReportOpensWithAPlainLanguageVerdict() {
+        val html = LatencyExport.toHtml(
+            report(records = List(10) { call(route = "/users/{id}", totalMs = 120) }),
+        )
+
+        assertTrue("there should be a verdict section", html.contains("class=\"verdict"))
+        assertTrue(html.contains("Excellent"))
+        assertTrue("say what the verdict is based on", html.contains("Judged on"))
+        assertTrue("explain p95 where the verdict is given", html.contains("19 of every 20"))
+    }
+
+    @Test
+    fun aSlowSessionIsCalledSlowRatherThanLeftToTheReader() {
+        val html = LatencyExport.toHtml(
+            report(records = List(10) { call(route = "/checkout", totalMs = 1_400) }),
+        )
+
+        assertTrue(html.contains("Slow"))
+        assertTrue(html.contains("Noticeable to users"))
+    }
+
+    @Test
+    fun aVerySlowSessionReadsAsPoor() {
+        val html = LatencyExport.toHtml(
+            report(records = List(10) { call(route = "/checkout", totalMs = 3_000) }),
+        )
+
+        assertTrue(html.contains("Poor"))
+        assertTrue(html.contains("may give up"))
+    }
+
+    /**
+     * Naming the endpoint is most of the value: "something is slow" is not
+     * actionable, "/checkout is slow" is.
+     */
+    @Test
+    fun theVerdictNamesTheRouteWorthLookingAtFirst() {
+        val html = LatencyExport.toHtml(
+            report(
+                records = List(5) { call(route = "/fast", totalMs = 80) } +
+                    List(5) { call(route = "/checkout", totalMs = 1_800) },
+            ),
+        )
+
+        assertTrue(html.contains("Where to look first"))
+        assertTrue(html.contains("/checkout"))
+    }
+
+    /**
+     * Backend time and connection setup look identical in a total and go to
+     * completely different people, so the report says which it is.
+     */
+    @Test
+    fun theVerdictNamesTheCauseNotJustTheSymptom() {
+        val serverBound = LatencyExport.toHtml(
+            report(
+                records = List(5) {
+                    call(route = "/checkout", totalMs = 1_800, phases = Phases(serverMs = 1_700))
+                },
+            ),
+        )
+        assertTrue(
+            "a server-dominated route should point at the backend",
+            serverBound.contains("backend question"),
+        )
+
+        val connectBound = LatencyExport.toHtml(
+            report(
+                records = List(5) {
+                    call(
+                        route = "/checkout",
+                        totalMs = 1_800,
+                        phases = Phases(dnsMs = 400, connectMs = 600, tlsMs = 700),
+                    )
+                },
+            ),
+        )
+        assertTrue(
+            "a connection-dominated route should not blame the backend",
+            connectBound.contains("Reusing connections"),
+        )
+    }
+
+    /**
+     * One unlucky call is an anecdote, not something to send someone chasing.
+     * The headline goes to a route that is *repeatedly* slow, even when a
+     * single outlier elsewhere was slower still.
+     */
+    @Test
+    fun aOneOffOutlierDoesNotBecomeTheHeadline() {
+        val html = LatencyExport.toHtml(
+            report(
+                records = List(20) { call(route = "/fast", totalMs = 90) } +
+                    List(5) { call(route = "/checkout", totalMs = 1_200) } +
+                    listOf(call(route = "/one-off", totalMs = 9_000)),
+            ),
+        )
+
+        val headline = html.substringAfter("Where to look first").take(200)
+        assertTrue("the repeatedly slow route should lead: $headline", headline.contains("/checkout"))
+        assertTrue("a route seen once should not: $headline", !headline.contains("/one-off"))
+    }
+
+    /** Nothing worth chasing means nothing is pointed at. */
+    @Test
+    fun ahealthySessionIsNotGivenSomethingToFix() {
+        val html = LatencyExport.toHtml(
+            report(records = List(20) { call(route = "/fast", totalMs = 90) }),
+        )
+
+        assertTrue(html.contains("Excellent"))
+        assertTrue(
+            "an excellent session should not be handed a scapegoat",
+            !html.contains("Where to look first"),
+        )
+    }
+
+    // -------------------------------------------------------------- numbers
+
+    @Test
+    fun theAverageIsShownAndItsLimitExplained() {
+        val html = LatencyExport.toHtml(
+            report(records = listOf(call(totalMs = 100), call(totalMs = 300))),
+        )
+
+        assertTrue("an average tile was asked for", html.contains("Average call"))
+        // And immediately qualified, or it will be read as the verdict.
+        assertTrue(html.contains("Why the verdict uses p95 and not the average"))
+        assertTrue(html.contains("hid them"))
+    }
+
+    /** The scale is printed so nobody has to go and look one up elsewhere. */
+    @Test
+    fun theRatingScaleIsPrintedInTheReport() {
+        val html = LatencyExport.toHtml(report())
+
+        listOf("Excellent", "Good", "Acceptable", "Slow", "Poor").forEach { label ->
+            assertTrue("$label missing from the scale", html.contains(label))
+        }
+        assertTrue(html.contains("200 ms"))
+        assertTrue(html.contains("whole round trip from the device"))
+        assertTrue("say which column compares to published backend figures", html.contains("Server"))
+    }
+
+    /** Chrome belongs out of the way, and must not print. */
+    @Test
+    fun theThemeSwitchIsAnIconInTheCorner() {
+        val html = LatencyExport.toHtml(report())
+
+        assertTrue(html.contains("class=\"theme-toggle\""))
+        assertTrue("it needs a label for a screen reader", html.contains("aria-label=\"Switch between light and dark\""))
+        assertTrue("an icon, not the words", html.contains("icon-sun") && html.contains("icon-moon"))
+        assertTrue(html.contains(".theme-toggle { display: none; }"))
     }
 }

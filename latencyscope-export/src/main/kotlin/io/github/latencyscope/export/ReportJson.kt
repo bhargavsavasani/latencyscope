@@ -20,11 +20,14 @@ internal object ReportJson {
             field("name", report.session.device.libraryVersion.let { "LatencyScope" })
             field("version", report.session.device.libraryVersion)
         }
-        objectField("thresholds") {
-            field("warnMs", report.warnThresholdMs)
-            field("slowMs", report.slowThresholdMs)
+        objectField("ratingScale") {
+            field("excellentUnderMs", report.ratingScale.excellentUnderMs)
+            field("goodUnderMs", report.ratingScale.goodUnderMs)
+            field("acceptableUnderMs", report.ratingScale.acceptableUnderMs)
+            field("slowUnderMs", report.ratingScale.slowUnderMs)
         }
         objectField("session") { writeSession(report) }
+        field("verdict", LatencyFormat.rating(report, report.overall.p95Ms).label)
         objectField("overall") { writeStats(report.overall) }
         field("throughputBytesPerSecond", report.throughputBytesPerSecond)
         arrayField("routes") {

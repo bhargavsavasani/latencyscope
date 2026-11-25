@@ -218,24 +218,30 @@ class LatencyScopeTest {
     }
 
     @Test
-    fun reportCarriesConfiguredThresholds() {
-        LatencyScope.initForTesting(
-            LatencyConfig(warnThresholdMs = 150, slowThresholdMs = 900),
-        )
+    fun reportCarriesTheConfiguredRatingScale() {
+        val scale = LatencyRatingScale(150, 400, 900, 1_500)
+        LatencyScope.initForTesting(LatencyConfig(ratingScale = scale))
         LatencyScope.start()
         LatencyScope.submit(rawCall())
 
         val report = LatencyScope.report(LatencyScope.stop())!!
-        assertEquals(150, report.warnThresholdMs)
-        assertEquals(900, report.slowThresholdMs)
+        // The report is judged by the scale that was in force when it was
+        // recorded, so a report read later is read against its own yardstick.
+        assertEquals(scale, report.ratingScale)
     }
 
     @Test
-    fun configRejectsInvalidThresholds() {
-        assertTrue(
-            runCatching { LatencyConfig(warnThresholdMs = 2_000, slowThresholdMs = 1_000) }
-                .exceptionOrNull() is IllegalArgumentException,
-        )
+    fun theRatingScaleMustBeInAscendingOrder() {
+        // Out of order, the bands would overlap and a duration could rate as
+        // two different things.
+        listOf(
+            { LatencyRatingScale(excellentUnderMs = 600, goodUnderMs = 500) },
+            { LatencyRatingScale(goodUnderMs = 1_200, acceptableUnderMs = 1_000) },
+            { LatencyRatingScale(acceptableUnderMs = 3_000, slowUnderMs = 2_000) },
+            { LatencyRatingScale(excellentUnderMs = 0) },
+        ).forEach { build ->
+            assertTrue(runCatching(build).exceptionOrNull() is IllegalArgumentException)
+        }
     }
 
     private fun rawCall(

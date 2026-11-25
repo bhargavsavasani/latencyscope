@@ -295,8 +295,7 @@ public object LatencyScope {
         val target = session ?: lastSession ?: currentSession() ?: return null
         return Aggregator.aggregate(
             session = target,
-            warnThresholdMs = config.warnThresholdMs,
-            slowThresholdMs = config.slowThresholdMs,
+            ratingScale = config.ratingScale,
             generatedAtEpochMs = clock.epochMs(),
         )
     }
