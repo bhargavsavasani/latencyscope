@@ -19,7 +19,7 @@ are worth agreeing on before code gets written:
 ## Getting set up
 
 ```bash
-git clone https://github.com/GH_USER/latencyscope.git
+git clone https://github.com/bhargavsavasani/latencyscope.git
 cd latencyscope
 ./gradlew check
 ```

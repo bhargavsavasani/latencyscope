@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/GH_USER/latencyscope/security/advisories/new
+    url: https://github.com/bhargavsavasani/latencyscope/security/advisories/new
     about: Report privately, not as a public issue. See SECURITY.md.
   - name: Question
-    url: https://github.com/GH_USER/latencyscope/discussions
+    url: https://github.com/bhargavsavasani/latencyscope/discussions
     about: How do I measure X, what does this number mean.

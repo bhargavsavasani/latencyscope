@@ -1,8 +1,10 @@
-# LatencyScope
+# LatencyScope — Android API latency monitoring library
 
-Drop-in Android library that records how long your app's API calls actually
-take — while you use the app — and produces a detailed HTML and CSV latency
-report when you stop recording.
+**Measure, break down and report API latency in an Android app.** LatencyScope
+records every network call your app makes — through **OkHttp, Retrofit, Ktor,
+Volley or `HttpURLConnection`** — while you use the app, and writes a readable
+**HTML, CSV and JSON latency report** when you stop recording. Kotlin, `minSdk
+21`, no backend and no account.
 
 > **Status: pre-release.** Everything works and is tested — the engine, all
 > four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug UIs, the
@@ -19,15 +21,38 @@ those 450 ms went — connection-pool wait, DNS, TCP, TLS, request upload,
 **server think time**, response download — aggregated per normalized route with
 p50/p90/p95/p99, so a slow screen becomes an actionable number.
 
+It answers the questions you actually have when a screen feels slow:
+
+- **Is it us or the backend?** Server think time is a column of its own.
+- **Which endpoint?** Calls are grouped by route, with `/users/4821` and
+  `/users/9f3c…` collapsed into `/users/{id}` automatically.
+- **How bad, and for whom?** p50/p90/p95/p99 per route, split by network type
+  (wifi / cellular), not one average that hides the tail.
+- **Is this number good?** Every route gets a plain-English verdict against a
+  published scale, so you don't need to already know what "good" looks like.
+- **Is anything failing quietly?** Error rate and failure count per route.
+
+No SDK key, no dashboard, no data leaving the device. The report is a file.
+
+## Supported HTTP clients
+
+| Your stack | Module | One-line setup | Phase breakdown |
+|---|---|---|---|
+| **OkHttp** / **Retrofit** | `latencyscope-okhttp` | `OkHttpClient.Builder().installLatencyScope()` | Full — DNS, TCP, TLS, request, server, response |
+| **Ktor** client (any engine) | `latencyscope-ktor` | `install(LatencyScopeKtorPlugin)` | Total time |
+| **Volley** | `latencyscope-volley` | wrap your `BaseHttpStack` | Total time |
+| **`HttpURLConnection`** | `latencyscope-urlconnection` | wrap the connection | Total time |
+
+Using more than one? Install more than one — they record into the same
+session. See [Other HTTP stacks](#other-http-stacks) and
+[What each stack can see](#what-each-stack-can-see).
+
 ## Install
 
 > **Not published yet.** `v0.1.0` is in preparation. Until it reaches Maven
 > Central, build it yourself — `./gradlew publishToMavenLocal` and add
 > `mavenLocal()` to your repositories, or wire the repo in as a
 > [composite build][composite].
->
-> `GH_USER` below is a placeholder for the publishing account, not a real
-> group id.
 
 [composite]: https://docs.gradle.org/current/userguide/composite_builds.html
 
@@ -37,15 +62,15 @@ nothing else is required.
 ```kotlin
 dependencies {
     // the stack you use — one or more
-    debugImplementation("io.github.GH_USER:latencyscope-okhttp:0.1.0")
+    debugImplementation("io.github.bhargavsavasani:latencyscope-okhttp:0.1.0")
 
     // reading the report
-    debugImplementation("io.github.GH_USER:latencyscope-export:0.1.0")      // HTML / CSV / JSON
+    debugImplementation("io.github.bhargavsavasani:latencyscope-export:0.1.0")      // HTML / CSV / JSON
                                                                             // + the recording notification
-    debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")  // optional in-app screen
+    debugImplementation("io.github.bhargavsavasani:latencyscope-ui-compose:0.1.0")  // optional in-app screen
 
     // and nothing at all in release
-    releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
+    releaseImplementation("io.github.bhargavsavasani:latencyscope-noop:0.1.0")
 }
 ```
 
@@ -564,11 +589,11 @@ Leaving the instrumentation installed in release is already cheap — one
 volatile read per call — but `latencyscope-noop` removes it entirely:
 
 ```kotlin
-debugImplementation("io.github.GH_USER:latencyscope-okhttp:0.1.0")
-debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")
-debugImplementation("io.github.GH_USER:latencyscope-export:0.1.0")
+debugImplementation("io.github.bhargavsavasani:latencyscope-okhttp:0.1.0")
+debugImplementation("io.github.bhargavsavasani:latencyscope-ui-compose:0.1.0")
+debugImplementation("io.github.bhargavsavasani:latencyscope-export:0.1.0")
 
-releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
+releaseImplementation("io.github.bhargavsavasani:latencyscope-noop:0.1.0")
 ```
 
 The no-op mirrors the public API of **every** module, not just core, so

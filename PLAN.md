@@ -5,7 +5,7 @@ detailed HTML + CSV report when the session stops.
 
 > **Assumptions (change before Phase 0 if wrong)**
 > - Library name: **Latencyscope**, facade class `Latencyscope`
-> - Group id: `io.github.<GITHUB_USERNAME>` — placeholder `GH_USER` used below
+> - Group id: `io.github.<GITHUB_USERNAME>` — placeholder `bhargavsavasani` used below
 > - Repo name: `latencyscope`
 > - License: Apache-2.0
 
@@ -44,9 +44,9 @@ latencyscope/
 
 Consumer wiring:
 ```kotlin
-debugImplementation("io.github.GH_USER:latencyscope-okhttp:0.1.0")
-debugImplementation("io.github.GH_USER:latencyscope-ui-compose:0.1.0")
-releaseImplementation("io.github.GH_USER:latencyscope-noop:0.1.0")
+debugImplementation("io.github.bhargavsavasani:latencyscope-okhttp:0.1.0")
+debugImplementation("io.github.bhargavsavasani:latencyscope-ui-compose:0.1.0")
+releaseImplementation("io.github.bhargavsavasani:latencyscope-noop:0.1.0")
 ```
 
 **Binary-compatibility rule:** `latencyscope-noop` must expose byte-for-byte the
@@ -172,7 +172,7 @@ object LatencyExport {
 - `git init`, Apache-2.0 `LICENSE`, `.gitignore` audit, `README.md` stub.
 - Kotlin: **no plugin needed** — AGP 9.5.2 compiles Kotlin out of the box
   (verified: Kotlin 2.2.10, `src/main/kotlin` source set honoured).
-- Rename `:app` → `:sample`, applicationId `io.github.GH_USER.latencyscope.sample`.
+- Rename `:app` → `:sample`, applicationId `io.github.bhargavsavasani.latencyscope.sample`.
 - `build-logic` included build, convention plugin `latencyscope.android.library` —
   centralises compileSdk 37, minSdk **21**, `ExplicitApiMode.Strict`, JVM 11
   target, consumer ProGuard, test wiring; publishing block added in Phase 10.
@@ -701,7 +701,7 @@ Only the ready-made activities apply it.
 
 Known gaps, all Phase 10: no CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, issue
 or PR templates, no CI workflows, no publishing config — and the README's
-`io.github.GH_USER` coordinates are a labelled placeholder until the real
+`io.github.bhargavsavasani` coordinates are a labelled placeholder until the real
 group id is chosen.
 
 ### Zero-setup recording and a richer report (after the audit)
@@ -953,7 +953,7 @@ the same parallel load that broke it.
     landing somewhere readable — all three have been real bugs in this project.
     It also says what does *not* count, including the report being sensitive by
     design.
-  - **Still open, and it is one word.** `GROUP` is `io.github.GH_USER`. The same
+  - **Still open, and it is one word.** `GROUP` is `io.github.bhargavsavasani`. The same
     token appears in the README, the changelog and the issue-template config.
     Maven coordinates are permanent once an artifact is on Central, so the real
     GitHub username has to replace it before the first tag — `docs/releasing.md`

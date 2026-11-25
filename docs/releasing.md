@@ -7,9 +7,9 @@ hand.
 
 ### Coordinates
 
-`GROUP` in the root `gradle.properties` is `io.github.<your GitHub username>`.
-Replace the `GH_USER` token there, in `README.md`, in `CHANGELOG.md` and in
-`.github/ISSUE_TEMPLATE/config.yml` before the first release.
+`GROUP` in the root `gradle.properties` is `io.github.bhargavsavasani`, taken
+from the GitHub account the project is published under. Change it in one place
+only — every module reads it from there.
 
 **Coordinates on Maven Central are permanent.** An artifact cannot be deleted
 or re-published, so this is the one decision worth getting right before the
@@ -89,8 +89,8 @@ account:
 repositories { maven("https://jitpack.io") }
 
 dependencies {
-    debugImplementation("com.github.GH_USER.latencyscope:latencyscope-okhttp:v0.1.0")
-    releaseImplementation("com.github.GH_USER.latencyscope:latencyscope-noop:v0.1.0")
+    debugImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-okhttp:v0.1.0")
+    releaseImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-noop:v0.1.0")
 }
 ```
 

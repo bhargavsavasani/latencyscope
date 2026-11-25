@@ -50,5 +50,5 @@ First public release.
 - Ktor and Volley cannot report a phase breakdown, because no engine exposes
   one. Those records carry totals and sizes only.
 
-[Unreleased]: https://github.com/GH_USER/latencyscope/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/GH_USER/latencyscope/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bhargavsavasani/latencyscope/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/bhargavsavasani/latencyscope/releases/tag/v0.1.0
