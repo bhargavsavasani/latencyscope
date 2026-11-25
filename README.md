@@ -1,38 +1,74 @@
-# LatencyScope — Android API latency monitoring library
+<div align="center">
 
-**Measure, break down and report API latency in an Android app.** LatencyScope
-records every network call your app makes — through **OkHttp, Retrofit, Ktor,
-Volley or `HttpURLConnection`** — while you use the app, and writes a readable
-**HTML, CSV and JSON latency report** when you stop recording. Kotlin, `minSdk
-21`, no backend and no account.
+# LatencyScope
 
-> **Status: pre-release.** Everything works and is tested — the engine, all
-> four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug UIs, the
-> API-identical no-op for release builds and the sample app. 262 tests,
-> 0 lint issues. What is left is the `v0.1.0` tag itself.
->
-> [Docs](docs/) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
-> · [Plan](PLAN.md)
+**Android API latency monitoring — find out where your network time actually goes.**
 
-## Why
+[![JitPack](https://img.shields.io/jitpack/v/github/bhargavsavasani/latencyscope?label=JitPack)](https://jitpack.io/#bhargavsavasani/latencyscope)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![API](https://img.shields.io/badge/minSdk-21-brightgreen.svg)](https://developer.android.com/about/versions/lollipop)
+[![Tests](https://img.shields.io/badge/tests-262%20passing-success.svg)](#build)
 
-Most tooling tells you a request took `450 ms`. LatencyScope tells you *where*
-those 450 ms went — connection-pool wait, DNS, TCP, TLS, request upload,
-**server think time**, response download — aggregated per normalized route with
-p50/p90/p95/p99, so a slow screen becomes an actionable number.
+[Install](#install) · [Quick start](#quick-start) · [Screenshots](#what-the-report-looks-like) · [Docs](docs/) · [FAQ](docs/faq.md)
+
+</div>
+
+---
+
+LatencyScope records every network call your app makes — through **OkHttp,
+Retrofit, Ktor, Volley or `HttpURLConnection`** — while you use the app, and
+writes a readable **HTML, CSV and JSON latency report** when you stop
+recording.
+
+Kotlin. `minSdk 21`. No backend, no SDK key, no account, and nothing leaves
+the device. The report is a file on the phone.
+
+```kotlin
+LatencyScope.init(this, LatencyConfig(autoStart = true))   // record everything
+OkHttpClient.Builder().installLatencyScope().build()       // instrument the client
+// press "Stop & report" in the notification → HTML report opens
+```
+
+## Why not just log the response time?
+
+Most tooling tells you a request took `450 ms`. LatencyScope tells you **where
+those 450 ms went**:
+
+```
+GET /v1/cart/{id}                 p95  1,240 ms   Slow
+├─ Wait        12 ms   ▏            connection-pool wait
+├─ Connect    186 ms   ███▏         DNS + TCP + TLS
+├─ Request      8 ms   ▏            upload
+├─ Server     968 ms   ████████▏    ← the backend, not you
+└─ Response    66 ms   █▏           download
+```
 
 It answers the questions you actually have when a screen feels slow:
 
-- **Is it us or the backend?** Server think time is a column of its own.
-- **Which endpoint?** Calls are grouped by route, with `/users/4821` and
-  `/users/9f3c…` collapsed into `/users/{id}` automatically.
-- **How bad, and for whom?** p50/p90/p95/p99 per route, split by network type
-  (wifi / cellular), not one average that hides the tail.
-- **Is this number good?** Every route gets a plain-English verdict against a
-  published scale, so you don't need to already know what "good" looks like.
-- **Is anything failing quietly?** Error rate and failure count per route.
+| Question | How it answers |
+|---|---|
+| **Is it us or the backend?** | Server think time is a column of its own |
+| **Which endpoint?** | `/users/4821` and `/users/9f3c…` collapse into `/users/{id}` automatically |
+| **How bad, and for whom?** | p50/p90/p95/p99 per route, split by wifi / cellular — not one average that hides the tail |
+| **Is this number good?** | Every route gets a plain-English verdict against a published scale |
+| **Is anything failing quietly?** | Error rate and failure count per route |
 
-No SDK key, no dashboard, no data leaving the device. The report is a file.
+## What the report looks like
+
+<div align="center">
+<img src="docs/images/report-summary.png" alt="LatencyScope HTML report — session summary with overall verdict" width="800">
+<br><em>Session summary — every number rated against a published scale</em>
+<br><br>
+<img src="docs/images/report-routes.png" alt="Per-route latency table with p50, p90, p95 and p99 percentiles" width="800">
+<br><em>Per-route percentiles, so the slow endpoint names itself</em>
+<br><br>
+<img src="docs/images/report-phases.png" alt="Per-phase breakdown showing DNS, TCP, TLS, server think time and download" width="800">
+<br><em>Phase breakdown — where the milliseconds actually went</em>
+</div>
+
+> The report is a single self-contained HTML file. No server, no internet
+> connection, nothing to host. CSV and JSON are written alongside it for
+> spreadsheets and scripts.
 
 ## Supported HTTP clients
 
@@ -116,21 +152,6 @@ Compose are `compileOnly` — the library compiles against the oldest version it
 supports and uses whichever one *your* app already ships, so it never drags a
 version into your build or overrides yours.
 
-## Modules
-
-| Module | Purpose |
-|---|---|
-| `latencyscope-core` | Models, recorder, route normalization, redaction, aggregation |
-| `latencyscope-okhttp` | OkHttp / Retrofit instrumentation (full phase breakdown) |
-| `latencyscope-ktor` | Ktor client plugin (any engine) |
-| `latencyscope-volley` | Volley `BaseHttpStack` wrapper |
-| `latencyscope-urlconnection` | `HttpURLConnection` wrapper |
-| `latencyscope-export` | HTML / CSV / JSON report renderers |
-| `latencyscope-ui-compose` | Compose debug report screen |
-| `latencyscope-ui-view` | View-based debug report screen |
-| `latencyscope-noop` | API-identical no-op for release builds |
-| `sample` | Demo app exercising all four HTTP stacks |
-
 ## Quick start
 
 Three steps. The whole thing, start to finished report, with no manual
@@ -197,6 +218,21 @@ val report = LatencyScope.report(LatencyScope.stop())
 
 Leaving the instrumentation installed in release builds is safe: with no
 session recording, each callback performs one volatile read and returns.
+
+## Modules
+
+| Module | Purpose |
+|---|---|
+| `latencyscope-core` | Models, recorder, route normalization, redaction, aggregation |
+| `latencyscope-okhttp` | OkHttp / Retrofit instrumentation (full phase breakdown) |
+| `latencyscope-ktor` | Ktor client plugin (any engine) |
+| `latencyscope-volley` | Volley `BaseHttpStack` wrapper |
+| `latencyscope-urlconnection` | `HttpURLConnection` wrapper |
+| `latencyscope-export` | HTML / CSV / JSON report renderers |
+| `latencyscope-ui-compose` | Compose debug report screen |
+| `latencyscope-ui-view` | View-based debug report screen |
+| `latencyscope-noop` | API-identical no-op for release builds |
+| `sample` | Demo app exercising all four HTTP stacks |
 
 ## How a session works
 
