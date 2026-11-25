@@ -11,7 +11,7 @@ surface of `latencyscope-core` and its mirror in `latencyscope-noop`.
 
 ## [Unreleased]
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-11-25
 
 First public release.
 
