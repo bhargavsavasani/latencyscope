@@ -49,12 +49,19 @@ session. See [Other HTTP stacks](#other-http-stacks) and
 
 ## Install
 
-> **Not published yet.** `v0.1.0` is in preparation. Until it reaches Maven
-> Central, build it yourself — `./gradlew publishToMavenLocal` and add
-> `mavenLocal()` to your repositories, or wire the repo in as a
-> [composite build][composite].
+Available from **JitPack** today. Maven Central is in preparation.
 
-[composite]: https://docs.gradle.org/current/userguide/composite_builds.html
+Add the repository in `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
+```
 
 Take only the modules you need. Each HTTP module pulls in `latencyscope-core`;
 nothing else is required.
@@ -62,19 +69,40 @@ nothing else is required.
 ```kotlin
 dependencies {
     // the stack you use — one or more
-    debugImplementation("io.github.bhargavsavasani:latencyscope-okhttp:0.1.0")
+    debugImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-okhttp:v0.1.0")
 
     // reading the report
-    debugImplementation("io.github.bhargavsavasani:latencyscope-export:0.1.0")      // HTML / CSV / JSON
-                                                                            // + the recording notification
-    debugImplementation("io.github.bhargavsavasani:latencyscope-ui-compose:0.1.0")  // optional in-app screen
+    debugImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-export:v0.1.0")
+    //   ^ HTML / CSV / JSON writers, and the recording notification
+
+    // optional in-app screen
+    debugImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-ui-compose:v0.1.0")
 
     // and nothing at all in release
-    releaseImplementation("io.github.bhargavsavasani:latencyscope-noop:0.1.0")
+    releaseImplementation("com.github.bhargavsavasani.latencyscope:latencyscope-noop:v0.1.0")
 }
 ```
 
-That last line is the point of the library's shape: see
+The version is the **git tag**, `v` included — JitPack uses the tag name
+verbatim. The first build of a tag is compiled on demand and can take several
+minutes; after that it is cached.
+
+<details>
+<summary>Once it is on Maven Central</summary>
+
+The group and version both change, and the JitPack repository is no longer
+needed:
+
+```kotlin
+debugImplementation("io.github.bhargavsavasani:latencyscope-okhttp:0.1.0")
+releaseImplementation("io.github.bhargavsavasani:latencyscope-noop:0.1.0")
+```
+
+Kotlin package names are the same either way, so imports never change.
+
+</details>
+
+That `releaseImplementation` line is the point of the library's shape: see
 [Keeping it out of release builds](#keeping-it-out-of-release-builds). If you
 would rather ship the real thing in release, that is safe too — an installed
 but non-recording LatencyScope costs one volatile read per call.
@@ -111,6 +139,10 @@ Three steps. The whole thing, start to finished report, with no manual
 **1 — wire it up once, in `Application.onCreate`:**
 
 ```kotlin
+import io.github.latencyscope.core.LatencyConfig
+import io.github.latencyscope.core.LatencyScope
+import io.github.latencyscope.export.LatencyNotification
+
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -125,10 +157,16 @@ class App : Application() {
 **2 — instrument the HTTP client you already have:**
 
 ```kotlin
+import io.github.latencyscope.okhttp.installLatencyScope
+
 val client = OkHttpClient.Builder()
     .installLatencyScope()          // pass your existing EventListener.Factory
     .build()                        // if you have one: .installLatencyScope(mine)
 ```
+
+`installLatencyScope` is an extension function, so it needs that import before
+it will appear in autocomplete — the IDE does not always offer it for a newly
+added dependency.
 
 Using Ktor, Volley or `HttpURLConnection` instead? One line each —
 see [Other HTTP stacks](#other-http-stacks).
