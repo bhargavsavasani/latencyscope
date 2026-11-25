@@ -165,6 +165,68 @@ class LatencyNotificationTest {
         assertNotNull("tapping it has to open the report", ready.contentIntent)
     }
 
+    /**
+     * One press is enough.
+     *
+     * Rendering a busy session takes a second or two, and the row has to say
+     * so for that whole time. If it reads as "nothing happened", the natural
+     * response is to press again — which is exactly the report that brought
+     * this test about.
+     */
+    @Test
+    fun onePressIsEnoughAndTheRowNeverGoesBlank() {
+        LatencyNotification.install(application, config())
+        LatencyScope.initForTesting(LatencyConfig())
+        LatencyScope.start("checkout")
+        repeat(3) { submit() }
+        drainMainThread()
+
+        pressStop()
+
+        // Whatever stage it has reached, something must be on screen saying so.
+        val titleNow = shadowOf(manager).allNotifications
+            .lastOrNull()
+            ?.let { shadowOf(it).contentTitle?.toString() }
+        assertNotNull("the row went blank the instant Stop was pressed", titleNow)
+        assertTrue(
+            "expected progress or the finished report, saw \"$titleNow\"",
+            titleNow!!.contains("Writing", ignoreCase = true) ||
+                titleNow.contains("ready", ignoreCase = true),
+        )
+
+        // And it gets there on its own, with no further input.
+        assertNotNull(awaitReadyNotification().contentIntent)
+        assertEquals(1, awaitSessions(1).size)
+    }
+
+    /**
+     * The press that was reported as "nothing happened, so I pressed again".
+     *
+     * The second press used to find the session already stopped and cancel the
+     * row outright — so the progress disappeared, the screen went blank, and
+     * the report arriving a second later looked like the second press had
+     * caused it.
+     */
+    @Test
+    fun aSecondPressWhileGeneratingLeavesTheProgressAlone() {
+        LatencyNotification.install(application, config())
+        LatencyScope.initForTesting(LatencyConfig())
+        LatencyScope.start("checkout")
+        repeat(3) { submit() }
+        drainMainThread()
+
+        pressStop()
+        pressStop()
+        pressStop()
+
+        assertTrue(
+            "the row must not be cancelled by an impatient second press",
+            shadowOf(manager).allNotifications.isNotEmpty(),
+        )
+        assertNotNull(awaitReadyNotification().contentIntent)
+        assertEquals("three presses, one report", 1, awaitSessions(1).size)
+    }
+
     /** Pressing Stop with nothing running must not leave a stuck row. */
     @Test
     fun stopWithNoSessionJustClearsTheNotification() {

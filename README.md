@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 250 tests, 0 lint issues.
+> sample app and the hardening pass. 252 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -183,8 +183,19 @@ appears:
 └──────────────────────────────────────────────┘
 ```
 
-It updates once a second while the session runs. Press **Stop & report** and
-it stops the session, writes all four files, and replaces itself:
+It updates once a second while the session runs. Press **Stop & report**
+once. The same row becomes a progress state while the report is rendered —
+a busy session takes a second or two — and then the finished report:
+
+```
+┌──────────────────────────────────────────────┐
+│  Writing report…                             │
+│  checkout · 47 calls                         │
+│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │
+└──────────────────────────────────────────────┘
+```
+
+then:
 
 ```
 ┌──────────────────────────────────────────────┐

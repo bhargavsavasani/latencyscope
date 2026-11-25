@@ -846,6 +846,30 @@ both in the test rather than the library:
 
 Five consecutive clean runs after the fix.
 
+### "I have to press Stop twice"
+
+Reported from a device: pressing **Stop & report** appeared to do nothing, and
+only a second press produced the finished report.
+
+The press was working. What followed it was not.
+
+| Cause | Effect |
+|---|---|
+| **A second press cancelled the progress row.** `stopAndReport` found the session already stopped, took the `session == null` branch and called `manager.cancel(...)` — a branch meant for a stale row, reached here while a report was actively being written | The progress notification vanished, the screen went blank, and the report arriving a second later looked like the second press had caused it |
+| **Two notification ids.** Recording used one, the finished report another, so the hand-off cancelled one row and posted a second | The system draws that as one row disappearing and another arriving, rather than a row that becomes the next stage |
+| **The progress row was easy to miss.** Title only, no context | Nothing on screen clearly said "working on it", so the press read as having done nothing — which is what invites the second press |
+| **The refresh ticker was never stopped on the button path.** `onSessionChanged(null)` returns early when the stop came from the action, and that early return skipped `refresh.stop()` | A 1-second timer kept firing for the life of the process. Harmless on screen — `showRecording` returns when nothing is recording — but a leak |
+
+Fixes: one notification id for the whole lifecycle, so the row updates in
+place from recording to generating to ready; a `generating` guard that makes
+any further press a no-op instead of destroying the row; a progress state
+that names the session and its call count; and `refresh.stop()` on every stop
+path.
+
+Two tests, both failing against the old code: one press reaches a finished
+report on its own and the row is never blank in between, and three presses in
+a row leave one report and one intact notification.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

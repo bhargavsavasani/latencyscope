@@ -112,8 +112,15 @@ public object LatencyNotification {
 
     private const val ACTION_STOP = "io.github.latencyscope.STOP_SESSION"
     private const val CHANNEL_ID = "latencyscope"
-    private const val RECORDING_ID = 0x1A7E
-    private const val READY_ID = 0x1A7F
+    /**
+     * One id for the whole lifecycle: recording → generating → ready.
+     *
+     * Two ids meant cancelling one row and posting another, which the system
+     * draws as the first disappearing and a second arriving. One id updates
+     * in place, so the row visibly becomes the next stage instead of
+     * flickering out and back.
+     */
+    private const val NOTIFICATION_ID = 0x1A7E
 
     @Volatile private var installed: Controller? = null
 
@@ -160,6 +167,13 @@ public object LatencyNotification {
         // about to replace with "writing report…".
         private val stoppingFromAction = java.util.concurrent.atomic.AtomicBoolean(false)
 
+        // True from the moment a stop begins until the report is on screen.
+        // Writing takes a second or two for a busy session, and in that window
+        // the Stop button has already gone — but a queued second press can
+        // still arrive, and it used to cancel the progress row outright,
+        // leaving the screen blank and the press looking like it did nothing.
+        private val generating = java.util.concurrent.atomic.AtomicBoolean(false)
+
         val stopReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 stopAndReport()
@@ -177,9 +191,10 @@ public object LatencyNotification {
                 val finished = LatencyScope.lastSession()
                 main.post {
                     refresh.stop()
+                    if (generating.get()) return@post
                     if (finished == null) {
                         // reset(), or a session with nothing to report.
-                        manager.cancel(RECORDING_ID)
+                        manager.cancel(NOTIFICATION_ID)
                     } else {
                         report(finished)
                     }
@@ -219,8 +234,8 @@ public object LatencyNotification {
 
         fun cancelAll() {
             main.post { refresh.stop() }
-            manager.cancel(RECORDING_ID)
-            manager.cancel(READY_ID)
+            manager.cancel(NOTIFICATION_ID)
+            manager.cancel(NOTIFICATION_ID)
         }
 
         private fun showRecording() {
@@ -255,10 +270,13 @@ public object LatencyNotification {
                 .addAction(0, config.stopLabel, stopIntent())
                 .build()
 
-            notifySafely(RECORDING_ID, notification)
+            notifySafely(NOTIFICATION_ID, notification)
         }
 
         private fun stopAndReport() {
+            // Already working on one: a second press must not disturb it.
+            if (generating.get()) return
+
             stoppingFromAction.set(true)
             val session = try {
                 LatencyScope.stop()
@@ -266,7 +284,9 @@ public object LatencyNotification {
                 stoppingFromAction.set(false)
             }
             if (session == null) {
-                manager.cancel(RECORDING_ID)
+                // Nothing was recording and nothing is being written, so the
+                // row is stale.
+                manager.cancel(NOTIFICATION_ID)
                 return
             }
 
@@ -281,10 +301,12 @@ public object LatencyNotification {
          * `LatencyScope.stop()` leave exactly the same thing behind.
          */
         private fun report(session: LatencySession) {
-            // Hold the row with a "working" state: rendering a busy session is
-            // not instant, and a notification that vanished and came back
-            // would read as a glitch.
-            notifySafely(RECORDING_ID, workingNotification())
+            generating.set(true)
+            refresh.stop()
+
+            // Posted before any work starts, so the press has visible effect
+            // immediately rather than after the render finishes.
+            notifySafely(NOTIFICATION_ID, workingNotification(session))
 
             writer.execute {
                 val outcome = runCatching {
@@ -293,7 +315,7 @@ public object LatencyNotification {
                     LatencyExport.writeAll(application, report, directoryFor(report))
                 }
                 main.post {
-                    manager.cancel(RECORDING_ID)
+                    generating.set(false)
                     outcome
                         .onSuccess { files -> showReady(files) }
                         .onFailure { failure ->
@@ -349,7 +371,7 @@ public object LatencyNotification {
                 if (share != null) builder.addAction(0, config.shareLabel, share)
             }
 
-            notifySafely(READY_ID, builder.build())
+            notifySafely(NOTIFICATION_ID, builder.build())
         }
 
         private fun showFailed(failure: Throwable) {
@@ -359,16 +381,28 @@ public object LatencyNotification {
                 .setContentText(failure.message ?: failure::class.java.simpleName)
                 .setAutoCancel(true)
                 .build()
-            notifySafely(READY_ID, notification)
+            notifySafely(NOTIFICATION_ID, notification)
         }
 
-        private fun workingNotification() =
+        /**
+         * The in-between state, made obvious on purpose.
+         *
+         * Rendering a busy session takes a second or two. Without a row that
+         * plainly says so, the press reads as having done nothing and the
+         * natural response is to press again.
+         */
+        private fun workingNotification(session: LatencySession) =
             NotificationCompat.Builder(application, CHANNEL_ID)
                 .setSmallIcon(config.smallIcon)
                 .setContentTitle(config.workingTitle)
+                .setContentText(
+                    session.name + " · " + session.records.size +
+                        if (session.records.size == 1) " call" else " calls",
+                )
                 .setOngoing(true)
                 .setShowWhen(false)
                 .setProgress(0, 0, true)
+                .setOnlyAlertOnce(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build()
 
