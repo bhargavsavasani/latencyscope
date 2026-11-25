@@ -4,12 +4,13 @@ Drop-in Android library that records how long your app's API calls actually
 take — while you use the app — and produces a detailed HTML and CSV latency
 report when you stop recording.
 
-> **Status: pre-release.** Phases 0-9 complete and audited: the
-> `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
-> both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 262 tests, 0 lint issues.
-> Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
-> See [PLAN.md](PLAN.md) for the full phased implementation plan.
+> **Status: pre-release.** Everything works and is tested — the engine, all
+> four HTTP stacks, the HTML/CSV/JSON exports, both in-app debug UIs, the
+> API-identical no-op for release builds and the sample app. 262 tests,
+> 0 lint issues. What is left is the `v0.1.0` tag itself.
+>
+> [Docs](docs/) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
+> · [Plan](PLAN.md)
 
 ## Why
 
@@ -20,10 +21,12 @@ p50/p90/p95/p99, so a slow screen becomes an actionable number.
 
 ## Install
 
-> **Not published yet.** `v0.1.0` is in preparation; until it is on Maven
-> Central, add the modules with a [composite build][composite] or by
-> publishing to `mavenLocal()`. The coordinates below are what the release
-> will use — `GH_USER` is a placeholder for the publishing account, not a real
+> **Not published yet.** `v0.1.0` is in preparation. Until it reaches Maven
+> Central, build it yourself — `./gradlew publishToMavenLocal` and add
+> `mavenLocal()` to your repositories, or wire the repo in as a
+> [composite build][composite].
+>
+> `GH_USER` below is a placeholder for the publishing account, not a real
 > group id.
 
 [composite]: https://docs.gradle.org/current/userguide/composite_builds.html
@@ -415,6 +418,11 @@ LatencyScope.init(
 Nothing leaves the device. The library has no network code of its own, no
 uploads and no analytics; a report goes where *you* send it.
 
+Full detail, including what is never recorded and what to check before
+forwarding a report: **[docs/privacy.md](docs/privacy.md)**. For routes that
+the defaults get wrong — slugs, mostly — see
+**[docs/route-normalization.md](docs/route-normalization.md)**.
+
 ## Getting the report out
 
 ```kotlin
@@ -486,7 +494,8 @@ Two things worth knowing about how to read it:
   **Server** column, not the total.
 
 Change the scale with `LatencyConfig(ratingScale = LatencyRatingScale(...))`;
-the report always prints whichever one it was rated against.
+the report always prints whichever one it was rated against. Every metric is
+defined in **[docs/metrics.md](docs/metrics.md)**.
 
 ### It explains its own numbers
 
@@ -636,6 +645,17 @@ When not recording, the cost is one volatile read.
 The record store is bounded by `maxRecords` (5,000 by default). Past that the
 oldest record is dropped and counted, and the report says how many — a report
 that silently loses data is worse than one that admits it.
+
+## Documentation
+
+| Doc | Read it when |
+|---|---|
+| [Report metrics](docs/metrics.md) | A number needs interpreting — what p95 means, what "Server" covers, why there is a verdict |
+| [Privacy and redaction](docs/privacy.md) | Before sharing a report, or before deciding what to ship |
+| [Route normalization](docs/route-normalization.md) | The route table has one row per call |
+| [Compatibility](docs/compatibility.md) | Upgrading, or wondering what counts as a breaking change |
+| [FAQ](docs/faq.md) | Everything else |
+| [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Releasing](docs/releasing.md) | |
 
 ## Build
 

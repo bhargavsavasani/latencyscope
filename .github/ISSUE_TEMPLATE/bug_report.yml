@@ -1,0 +1,59 @@
+name: Bug report
+description: A number looks wrong, or something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A latency report is usually the fastest way to show the problem — but
+        **read it first**. It contains your hostnames and route shapes.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead. If a measurement looks wrong, say what you believe the real number is and how you know.
+    validations: { required: true }
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest version you have. A failing test is ideal.
+    validations: { required: true }
+
+  - type: dropdown
+    id: stack
+    attributes:
+      label: HTTP stack
+      options: [OkHttp / Retrofit, Ktor, Volley, HttpURLConnection, Manual track(), More than one]
+    validations: { required: true }
+
+  - type: input
+    id: version
+    attributes:
+      label: LatencyScope version
+      placeholder: "0.1.0"
+    validations: { required: true }
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and API level
+      description: Whether it is an emulator matters — an emulator has no radio, so connect and DNS times are not representative.
+      placeholder: "Pixel 7, API 34"
+    validations: { required: true }
+
+  - type: input
+    id: stackversion
+    attributes:
+      label: Version of that HTTP client
+      description: These are compileOnly dependencies, so yours is the one that runs.
+      placeholder: "OkHttp 4.12.0"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything under the `LatencyScope` tag. Redact hostnames if you need to.
+      render: text

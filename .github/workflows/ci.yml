@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A new push to the same branch makes the previous run's answer irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Matches the toolchain unit tests are pinned to, so CI and a
+          # developer's machine cannot disagree about a test result.
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # `check` is the whole gate, not just tests: it pulls in the API-parity
+      # diff between core and the no-op, and core's JaCoCo coverage floor.
+      - name: Check
+        run: ./gradlew check --stacktrace
+
+      - name: Lint
+        run: ./gradlew lintDebug --stacktrace
+
+      # The release variant links the no-op, so this also proves the documented
+      # release wiring still compiles. `staging` is the one that proves R8's
+      # keep rules work, because it links the real modules.
+      - name: Assemble
+        run: ./gradlew assembleDebug assembleStaging assembleRelease --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/'
+          retention-days: 7

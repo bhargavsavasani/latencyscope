@@ -1,5 +1,6 @@
 plugins {
     id("latencyscope.android.library")
+    id("latencyscope.publish")
 }
 
 android {

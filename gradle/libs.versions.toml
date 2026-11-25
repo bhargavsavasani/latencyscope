@@ -23,7 +23,7 @@ composeBom = "2025.12.01"
 activityCompose = "1.13.0"
 recyclerview = "1.4.0"
 asm = "9.8"
-kover = "0.9.1"
+mavenPublish = "0.34.0"
 leakcanary = "2.14"
 
 [libraries]
@@ -65,9 +65,10 @@ kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-pl
 # from an `internal` one, which the JVM makes public either way.
 kotlin-metadata = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
 asm = { group = "org.ow2.asm", name = "asm", version.ref = "asm" }
+mavenPublish-gradlePlugin = { group = "com.vanniktech", name = "gradle-maven-publish-plugin", version.ref = "mavenPublish" }
 
 [plugins]
-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

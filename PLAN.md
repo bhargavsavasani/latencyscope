@@ -914,6 +914,56 @@ the same parallel load that broke it.
     generate release notes.
 - JitPack fallback documented for `0.1.0`.
 - Tag `v0.1.0`, publish, write announcement snippet.
+- **✅ COMPLETE, except the tag itself.** 262 tests, 0 lint issues, all three
+  variants assemble, all nine modules publish. Notes:
+  - **Publishing is a convention plugin, not nine blocks.** `latencyscope.publish`
+    applies `com.vanniktech.maven.publish` and does two things: Central Portal
+    (OSSRH is retired) with `automaticRelease = false`, and `signAllPublications()`.
+    It deliberately sets **no** POM metadata in Kotlin — the plugin already reads
+    `GROUP`, `VERSION_NAME` and the `POM_*` properties out of `gradle.properties`
+    itself. Restating them produced a POM listing **every licence and developer
+    twice**, which is how that was found. Verified by publishing all nine modules
+    to Maven Local and reading the result.
+  - **Each module carries its own `POM_NAME`/`POM_DESCRIPTION`.** Nine artifacts
+    all called "LatencyScope" is no help to someone looking at Central; they are
+    now "LatencyScope OkHttp", "LatencyScope No-op" and so on.
+  - **The published POM was checked, not assumed.** `latencyscope-okhttp` lists
+    `latencyscope-core` at compile scope and **no OkHttp at all** — `compileOnly`
+    means the consumer's own version wins, which is the whole dependency story of
+    this library, and now there is proof rather than an intention.
+  - **Kover's alias was removed from the version catalog.** Phase 9 replaced it
+    with JaCoCo after proving it reported zero classes; leaving a plugin alias for
+    a gate that cannot fail is an invitation to re-apply it.
+  - **Three workflows, with different trade-offs.** `ci.yml` runs `check` (which
+    pulls in `apiCheck` and the coverage floor), lint, and all three variants on
+    every PR. `instrumented.yml` runs the emulator matrix on **main and on
+    demand only** — gating every PR on emulator flake trains people to re-run
+    rather than to look. `release.yml` fires on `v*`, re-runs `check` before
+    publishing (an artifact on Central cannot be taken back), uploads a *staged*
+    deployment, and attaches the **staging** APK rather than the release one,
+    since staging is the minified build that still links the real library.
+  - **Docs are five pages written from the code, not from memory.** Report
+    metrics, privacy and redaction, route normalization, compatibility, FAQ, plus
+    a maintainer-facing releasing guide. The normalizer and redactor pages were
+    written with their sources open, so the token heuristic's thresholds and the
+    sensitive-key list are the real ones. Every relative link in every markdown
+    file was resolved against the filesystem.
+  - **`SECURITY.md` says what counts.** Not boilerplate: the interesting failures
+    here are data escaping redaction, injection into a report, and a report
+    landing somewhere readable — all three have been real bugs in this project.
+    It also says what does *not* count, including the report being sensitive by
+    design.
+  - **Still open, and it is one word.** `GROUP` is `io.github.GH_USER`. The same
+    token appears in the README, the changelog and the issue-template config.
+    Maven coordinates are permanent once an artifact is on Central, so the real
+    GitHub username has to replace it before the first tag — `docs/releasing.md`
+    leads with that.
+  - **Not done:** report screenshots in the README, and the announcement
+    snippet. A screenshot needs a browser or a device; `SampleReportWriterTest`
+    already writes a realistic report to
+    `build/reports/latencyscope-sample.html` to capture from. The emulator and
+    release workflows have also never executed — they are valid YAML and the
+    Gradle tasks they invoke all pass locally, but no CI run has proved them.
 
 ---
 
