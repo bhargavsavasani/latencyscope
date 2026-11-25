@@ -66,7 +66,9 @@ public object LatencyExport {
         val calls = File(directory, "$stem-calls.csv").apply { writeText(toCsvCalls(report)) }
         val json = File(directory, "$stem.json").apply { writeText(toJson(report)) }
 
-        return ExportedFiles(html = html, summaryCsv = summary, callsCsv = calls, json = json)
+        val files = ExportedFiles(html = html, summaryCsv = summary, callsCsv = calls, json = json)
+        logLocations(report, directory, files)
+        return files
     }
 
     /**
@@ -200,6 +202,31 @@ public object LatencyExport {
 
     /** The session's folder name: its own name, made safe for a filesystem. */
     internal fun sessionFolderName(report: LatencyReport): String = slug(report.session.name)
+
+    /**
+     * Prints every written path, after all four files are on disk.
+     *
+     * Logged here rather than at each call site, so the paths appear whether
+     * the report came from the notification's Stop button, from `share()`, or
+     * from a direct [writeAll]. All four are listed rather than just the
+     * HTML: the CSVs go into a spreadsheet and the JSON into a script, and
+     * guessing a filename from a directory is busywork when the writer
+     * already knows it.
+     *
+     * Reaching here at all means every file was written — [writeAll] throws
+     * otherwise — so this never reports a path that does not exist.
+     */
+    private fun logLocations(report: LatencyReport, directory: File, files: ExportedFiles) {
+        Log.i(LOG_TAG, "──── Latency report written ────")
+        Log.i(LOG_TAG, "Session   : " + report.session.name)
+        Log.i(LOG_TAG, "Calls     : " + report.overall.count + " (" + report.overall.errorCount + " failed)")
+        Log.i(LOG_TAG, "Folder    : " + directory.absolutePath)
+        Log.i(LOG_TAG, "HTML      : " + files.html.absolutePath)
+        Log.i(LOG_TAG, "Summary   : " + files.summaryCsv.absolutePath)
+        Log.i(LOG_TAG, "Calls CSV : " + files.callsCsv.absolutePath)
+        Log.i(LOG_TAG, "JSON      : " + files.json.absolutePath)
+        Log.i(LOG_TAG, "Pull it   : adb pull " + directory.absolutePath)
+    }
 
     private fun summaryLine(report: LatencyReport): String {
         val overall = report.overall

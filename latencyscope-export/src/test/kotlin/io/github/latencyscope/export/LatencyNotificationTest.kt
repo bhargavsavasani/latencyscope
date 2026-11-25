@@ -161,11 +161,7 @@ class LatencyNotificationTest {
             sessions.single().listFiles()?.map { it.extension }?.sorted(),
         )
 
-        val ready = shadowOf(manager).allNotifications.last()
-        assertTrue(
-            "the finished notification should say the report is ready",
-            shadowOf(ready).contentTitle.toString().contains("ready", ignoreCase = true),
-        )
+        val ready = awaitReadyNotification()
         assertNotNull("tapping it has to open the report", ready.contentIntent)
     }
 
@@ -198,12 +194,12 @@ class LatencyNotificationTest {
         drainMainThread()
 
         assertEquals("the report must be written either way", 1, awaitSessions(1).size)
+        awaitReadyNotification()
 
         val titles = shadowOf(manager).allNotifications.map {
             shadowOf(it).contentTitle?.toString().orEmpty()
         }
         assertTrue("no row should still claim to be recording: $titles", titles.none { it.contains("Recording") })
-        assertTrue("the finished report should be offered: $titles", titles.any { it.contains("ready", ignoreCase = true) })
     }
 
     @Test
@@ -253,17 +249,56 @@ class LatencyNotificationTest {
         ShadowLooper.idleMainLooper()
     }
 
-    /** The report is written off the main thread, so the test waits for it. */
+    /**
+     * Waits for the notification that offers the finished report.
+     *
+     * Files appearing on disk is not the end of the flow: the writer thread
+     * creates them, then posts back to the main thread to swap the
+     * notification. Asserting straight after [awaitSessions] races that post
+     * and sometimes sees the "writing report…" row instead.
+     */
+    private fun awaitReadyNotification(timeoutMs: Long = 5_000): android.app.Notification {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            drainMainThread()
+            val ready = shadowOf(manager).allNotifications.lastOrNull { notification ->
+                shadowOf(notification).contentTitle?.toString()
+                    ?.contains("ready", ignoreCase = true) == true
+            }
+            if (ready != null) return ready
+            Thread.sleep(POLL_MS)
+        }
+        throw AssertionError(
+            "no finished-report notification appeared; saw " +
+                shadowOf(manager).allNotifications.map {
+                    shadowOf(it).contentTitle?.toString()
+                },
+        )
+    }
+
+    /**
+     * Waits for [expected] *complete* session folders.
+     *
+     * Complete matters: `writeAll` calls `mkdirs()` before it writes anything,
+     * so a folder exists for a moment while it is still empty. Waiting only
+     * for the directory meant the very next assertion could read a half-written
+     * report and fail for no reason anyone could reproduce.
+     */
     private fun awaitSessions(expected: Int, timeoutMs: Long = 5_000): List<File> {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             drainMainThread()
-            val sessions = directory.listFiles()?.filter { it.isDirectory }.orEmpty()
-            if (sessions.size >= expected) return sessions
-            Thread.sleep(20)
+            val complete = completeSessions()
+            if (complete.size >= expected) return complete
+            Thread.sleep(POLL_MS)
         }
-        return directory.listFiles()?.filter { it.isDirectory }.orEmpty()
+        return completeSessions()
     }
+
+    private fun completeSessions(): List<File> =
+        directory.listFiles()
+            ?.filter { it.isDirectory && (it.listFiles()?.size ?: 0) >= FILES_PER_REPORT }
+            .orEmpty()
 
     private fun config() = NotificationConfig(
         // null would resolve to exactly `directory`; naming it keeps the
@@ -294,5 +329,7 @@ class LatencyNotificationTest {
 
     private companion object {
         const val REFRESH_MS = 50L
+        const val POLL_MS = 20L
+        const val FILES_PER_REPORT = 4
     }
 }

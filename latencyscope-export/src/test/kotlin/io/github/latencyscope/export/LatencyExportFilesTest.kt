@@ -8,6 +8,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
@@ -118,5 +119,28 @@ class LatencyExportFilesTest {
 
         assertEquals("content", uri.scheme)
         assertEquals(LatencyExport.authority(context), uri.authority)
+    }
+
+    /**
+     * Every written path goes to logcat.
+     *
+     * The report lives on the device and the person who wants it is at a
+     * desktop. Printing only the directory, or only the HTML, leaves them
+     * reconstructing filenames by hand — and the CSVs and JSON are the ones
+     * that get opened in a spreadsheet or a script.
+     */
+    @Test
+    fun everyWrittenPathIsPrintedToLogcat() {
+        ShadowLog.clear()
+
+        val files = LatencyExport.writeAll(context, report(name = "checkout"))
+
+        val logged = ShadowLog.getLogsForTag("LatencyScope").joinToString("\n") { it.msg }
+        files.all.forEach { file ->
+            assertTrue("${file.name} was never logged:\n$logged", logged.contains(file.absolutePath))
+        }
+        assertTrue("the folder itself is worth having", logged.contains(files.html.parentFile!!.absolutePath))
+        assertTrue("say how to fetch it", logged.contains("adb pull"))
+        assertTrue("name the session being reported", logged.contains("checkout"))
     }
 }

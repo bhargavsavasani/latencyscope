@@ -7,7 +7,7 @@ report when you stop recording.
 > **Status: pre-release.** Phases 0-9 complete and audited: the
 > `latencyscope-core` engine, all four HTTP stacks, the HTML/CSV/JSON exports,
 > both in-app debug UIs, the API-identical no-op for release builds, the
-> sample app and the hardening pass. 248 tests, 0 lint issues.
+> sample app and the hardening pass. 250 tests, 0 lint issues.
 > Remaining: packaging and publishing (see [PLAN.md](PLAN.md)).
 > See [PLAN.md](PLAN.md) for the full phased implementation plan.
 
@@ -195,12 +195,24 @@ it stops the session, writes all four files, and replaces itself:
 ```
 
 Tapping opens the HTML report. **Share** sends all four files wherever you
-like. The path is also written to logcat, so you can `adb pull` it:
+like. Every path is also printed to logcat the moment the report is written:
 
 ```
-I/LatencyScope: Latency report written: /storage/.../latencyscope/a1b2c3d4/latency-checkout-….html
-I/LatencyScope: Report directory (4 files): /storage/.../latencyscope/a1b2c3d4
+$ adb logcat -s LatencyScope
+I/LatencyScope: ──── Latency report written ────
+I/LatencyScope: Session   : checkout
+I/LatencyScope: Calls     : 47 (2 failed)
+I/LatencyScope: Folder    : /storage/emulated/0/Android/data/your.app/files/report/checkout
+I/LatencyScope: HTML      : /storage/emulated/0/Android/data/your.app/files/report/checkout/latency-checkout-20261125-143022.html
+I/LatencyScope: Summary   : …-summary.csv
+I/LatencyScope: Calls CSV : …-calls.csv
+I/LatencyScope: JSON      : ….json
+I/LatencyScope: Pull it   : adb pull /storage/emulated/0/Android/data/your.app/files/report/checkout
 ```
+
+All four are listed, not just the HTML: the CSVs go into a spreadsheet and
+the JSON into a script, and guessing a filename from a directory is busywork
+when the writer already knows it.
 
 **Stop means one thing.** Whether you press the notification's button or call
 `LatencyScope.stop()` yourself, the session ends, the report is written and

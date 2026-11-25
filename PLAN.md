@@ -820,6 +820,32 @@ A root that does not cover where files are written fails *late* — the write
 succeeds and only handing the file to another app throws — so the paths file
 and the writers have to move together.
 
+### Every written path goes to logcat
+
+The report lives on the device; the person who wants it is at a desktop.
+Printing only the HTML path left them reconstructing the other three
+filenames by hand — and the CSVs are the ones that go into a spreadsheet, the
+JSON into a script. All four are now printed, with the folder, the session
+name, the call and failure counts, and the `adb pull` line to copy.
+
+Logged inside `writeAll`, after every file is on disk, so it appears whichever
+path produced the report and never names a file that failed to write.
+
+**A flaky test found while covering this**, worth recording because flakiness
+is worse than failure — it teaches people to re-run rather than to look:
+`pressingStopWritesTheReportAndOffersIt` passed six runs in seven. Two races,
+both in the test rather than the library:
+
+1. It asserted on the notification as soon as the files appeared, but the
+   writer thread creates the files and *then* posts to the main thread to
+   swap the notification. It could read the "writing report…" row, which has
+   no tap target. Now it waits for the finished notification specifically.
+2. `awaitSessions` waited for the session *directory*, and `writeAll` calls
+   `mkdirs()` before writing anything — so the folder exists, empty, for a
+   moment. It now waits for a complete set of four files.
+
+Five consecutive clean runs after the fix.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.
