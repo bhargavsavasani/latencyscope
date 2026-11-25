@@ -11,6 +11,31 @@ surface of `latencyscope-core` and its mirror in `latencyscope-noop`.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-25
+
+### Added
+
+- **`LatencyNotification.requestPermissionIfNeeded(activity)`.** Asks for
+  `POST_NOTIFICATIONS` only when it would change something, and returns `true`
+  when the notification can already be shown. The library still never prompts
+  on its own — `install()` requests nothing, because a dialog raised from
+  `Application.onCreate` is usually denied and Android then refuses to ask a
+  second time. Mirrored in `latencyscope-noop`, where it never prompts.
+
+### Fixed
+
+- **JitPack could not build the library at all.** `signAllPublications()` was
+  called unconditionally, which registers a signing task that produces no
+  `.asc` file on a machine without a GPG key, and the publication then failed
+  on a missing artifact. Signing is now conditional on a key being present.
+  Maven Central still gets signed artifacts.
+
+### Changed
+
+- README rewritten around screenshots of a real report, with JitPack install
+  instructions and the imports the snippets need.
+
+
 ## [0.1.0] — 2026-11-25
 
 First public release.
@@ -50,5 +75,6 @@ First public release.
 - Ktor and Volley cannot report a phase breakdown, because no engine exposes
   one. Those records carry totals and sizes only.
 
-[Unreleased]: https://github.com/bhargavsavasani/latencyscope/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bhargavsavasani/latencyscope/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bhargavsavasani/latencyscope/releases/tag/v0.2.0
 [0.1.0]: https://github.com/bhargavsavasani/latencyscope/releases/tag/v0.1.0

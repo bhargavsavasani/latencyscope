@@ -358,15 +358,33 @@ Android 14 demands.
 ### Notification permission
 
 `POST_NOTIFICATIONS` is declared by `latencyscope-export`, so there is nothing
-to add to your manifest. On Android 13+ it is a runtime permission, and the
-library never requests it on your behalf — prompting your users is your
-decision, not a debug tool's. Ask when it suits you:
+to add to your manifest. On Android 13+ it is a runtime permission, and
+**nothing is requested during `install()`** — a dialog raised from
+`Application.onCreate` arrives before there is a screen to explain it, is
+usually denied, and Android then refuses to ask again.
+
+So ask from an activity, at a moment that makes sense:
 
 ```kotlin
-if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    LatencyNotification.requestPermissionIfNeeded(this)
 }
 ```
+
+It returns `true` when the notification can already be shown — permission
+held, or a device older than Android 13 that never needed it — and in that
+case no dialog appears. Pass your own `requestCode` if the default collides
+with one of yours.
+
+Skip this call and the notification simply never appears, which is a poor
+first run: the session records, but the only way to stop it is
+`LatencyScope.stop()` in code, and the only way to grant the permission
+afterwards is the system settings screen.
+
+If you want the result, register your own
+`ActivityResultContracts.RequestPermission` instead — the helper exists to
+save the boilerplate, not to replace that.
 
 Deny it and nothing breaks: the session records exactly as before, it is just
 invisible. `LatencyNotification.areNotificationsAllowed(context)` tells you

@@ -1,5 +1,6 @@
 package io.github.latencyscope.export
 
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationManager
 import android.content.Context
@@ -13,10 +14,12 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -295,6 +298,66 @@ class LatencyNotificationTest {
         assertEquals(0, shadowOf(manager).allNotifications.size)
         assertTrue("the session must record regardless", LatencyScope.isRecording())
         assertEquals(1, LatencyScope.recordedCount())
+    }
+
+    /**
+     * Granted already: the helper must not put a dialog in front of someone
+     * who has nothing left to agree to.
+     */
+    @Test
+    fun requestPermissionDoesNothingWhenAlreadyAllowed() {
+        shadowOf(manager).setNotificationsEnabled(true)
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+
+        val allowed = LatencyNotification.requestPermissionIfNeeded(activity)
+
+        assertTrue("already allowed, so nothing to ask", allowed)
+        assertNull(
+            "no permission request should have been made",
+            shadowOf(activity).lastRequestedPermission,
+        )
+    }
+
+    /**
+     * Denied on 13+: the point of the helper. Without this the notification
+     * never appears and the only route is the system settings screen, which
+     * is where this started.
+     */
+    @Test
+    fun requestPermissionAsksWhenDenied() {
+        shadowOf(manager).setNotificationsEnabled(false)
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+
+        val allowed = LatencyNotification.requestPermissionIfNeeded(activity)
+
+        assertFalse("not allowed yet, so it must ask", allowed)
+        val requested = shadowOf(activity).lastRequestedPermission
+        assertNotNull("a permission request should have been made", requested)
+        assertTrue(
+            "POST_NOTIFICATIONS is the permission that matters",
+            requested!!.requestedPermissions.contains(
+                android.Manifest.permission.POST_NOTIFICATIONS,
+            ),
+        )
+        assertEquals(
+            LatencyNotification.PERMISSION_REQUEST_CODE,
+            requested.requestCode,
+        )
+    }
+
+    /**
+     * An explicit request code must reach the activity, so an app that already
+     * uses 0x1A7E for something else can pass its own and still route the
+     * result correctly.
+     */
+    @Test
+    fun requestPermissionHonoursAnExplicitRequestCode() {
+        shadowOf(manager).setNotificationsEnabled(false)
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+
+        LatencyNotification.requestPermissionIfNeeded(activity, requestCode = 4321)
+
+        assertEquals(4321, shadowOf(activity).lastRequestedPermission!!.requestCode)
     }
 
     // ----------------------------------------------------------------- utils

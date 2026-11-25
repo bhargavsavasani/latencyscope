@@ -1,5 +1,6 @@
 package io.github.latencyscope.export
 
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,6 +12,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -109,6 +111,69 @@ public object LatencyNotification {
     @JvmStatic
     public fun areNotificationsAllowed(context: Context): Boolean =
         NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+    /**
+     * Asks for `POST_NOTIFICATIONS` if, and only if, it would change anything.
+     *
+     * Returns `true` when the notification can already be shown — because the
+     * permission is held, or because the device predates Android 13 and never
+     * needed it — and in that case nothing is requested and no dialog appears.
+     * Returns `false` when a request was handed to the system, or when the
+     * system declined to show one.
+     *
+     * Call it from an activity, at a point where a permission dialog makes
+     * sense to the person using the app:
+     *
+     * ```kotlin
+     * override fun onCreate(savedInstanceState: Bundle?) {
+     *     super.onCreate(savedInstanceState)
+     *     LatencyNotification.requestPermissionIfNeeded(this)
+     * }
+     * ```
+     *
+     * The result is deliberately not reported back. Nothing here depends on
+     * the answer: the session records either way, and the notification is a
+     * convenience for stopping it rather than a requirement. An app that does
+     * want the answer should register its own
+     * `ActivityResultContracts.RequestPermission` instead — this exists to
+     * save the boilerplate in the common case, not to replace that.
+     *
+     * **This is not called for you.** [install] does not request anything,
+     * because a permission dialog during `Application.onCreate` arrives before
+     * there is a screen to explain it, is usually denied, and Android then
+     * refuses to ask a second time. Choosing the moment is the app's job.
+     *
+     * Once the person has denied twice, Android stops showing the dialog
+     * altogether and this becomes a no-op. From then on the permission can
+     * only be granted in system settings.
+     */
+    @JvmStatic
+    @JvmOverloads
+    public fun requestPermissionIfNeeded(
+        activity: Activity,
+        requestCode: Int = PERMISSION_REQUEST_CODE,
+    ): Boolean {
+        if (areNotificationsAllowed(activity)) return true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            // Below 13 the permission does not exist, so a denial here means
+            // the channel or the app's notifications were switched off by
+            // hand. Requesting would do nothing; settings is the only route.
+            return false
+        }
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            requestCode,
+        )
+        return false
+    }
+
+    /**
+     * Request code used when [requestPermissionIfNeeded] is called without
+     * one. Chosen to be unlikely to collide with an app's own codes; pass an
+     * explicit value if it does.
+     */
+    public const val PERMISSION_REQUEST_CODE: Int = 0x1A7E
 
     private const val ACTION_STOP = "io.github.latencyscope.STOP_SESSION"
     private const val CHANNEL_ID = "latencyscope"

@@ -2,6 +2,7 @@
 
 package io.github.latencyscope.export
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -210,6 +211,24 @@ public object LatencyNotification {
 
     @JvmStatic
     public fun areNotificationsAllowed(context: Context): Boolean = false
+
+    /**
+     * Mirror of the real [requestPermissionIfNeeded]. Never prompts.
+     *
+     * A release build has no notification to show, so asking for permission
+     * to show one would be a dialog in exchange for nothing. Returns `false`,
+     * matching [areNotificationsAllowed], so a caller that branches on the
+     * result takes the same path it would when permission was refused.
+     */
+    @JvmStatic
+    @JvmOverloads
+    public fun requestPermissionIfNeeded(
+        activity: Activity,
+        requestCode: Int = PERMISSION_REQUEST_CODE,
+    ): Boolean = false
+
+    /** Mirror of the real request code. Never used, since nothing requests. */
+    public const val PERMISSION_REQUEST_CODE: Int = 0x1A7E
 }
 
 /** Mirror of the real [NotificationConfig]. Same shape, never consulted. */
