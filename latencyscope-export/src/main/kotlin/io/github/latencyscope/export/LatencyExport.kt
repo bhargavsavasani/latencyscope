@@ -165,9 +165,41 @@ public object LatencyExport {
     public fun authority(context: Context): String =
         context.packageName + ".latencyscope.fileprovider"
 
+    /**
+     * The one directory LatencyScope ever writes reports into:
+     * `Android/data/<your app>/files/report`.
+     *
+     * External app storage, so a report can be reached with `adb pull`, over
+     * USB, or from the device's Files app — without any permission, and
+     * without the file surviving an uninstall. Internal `cacheDir` would be
+     * none of those things: invisible from a desktop, and the system may
+     * delete it at any moment, which is the wrong promise for a file someone
+     * is about to attach to a ticket.
+     *
+     * Falls back to internal storage only when there is no external volume at
+     * all — a rare case, but silently writing nothing would be worse. Both
+     * locations are declared in the bundled FileProvider's paths, so a report
+     * can always be opened and shared from wherever it landed.
+     */
+    @JvmStatic
+    public fun reportsRoot(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, REPORTS_DIRECTORY)
+
+    /**
+     * Where [writeAll] puts this report: one folder per session, named after
+     * the session.
+     *
+     * Two sessions sharing a name share a folder rather than overwriting each
+     * other, because every file inside is already stamped with the time the
+     * session started. Recording "checkout" three times leaves three sets of
+     * files in one readable place.
+     */
     @JvmStatic
     public fun defaultDirectory(context: Context, report: LatencyReport): File =
-        File(File(context.cacheDir, "latencyscope"), report.session.id)
+        File(reportsRoot(context), sessionFolderName(report))
+
+    /** The session's folder name: its own name, made safe for a filesystem. */
+    internal fun sessionFolderName(report: LatencyReport): String = slug(report.session.name)
 
     private fun summaryLine(report: LatencyReport): String {
         val overall = report.overall
@@ -198,6 +230,7 @@ public object LatencyExport {
     }
 
     private const val MAX_SLUG_LENGTH = 40
+    private const val REPORTS_DIRECTORY = "report"
 }
 
 /** The files produced by [LatencyExport.writeAll]. */

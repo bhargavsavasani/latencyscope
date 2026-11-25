@@ -1,21 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Only the directories LatencyScope writes reports into are shared. Nothing
+  Only the one directory LatencyScope writes reports into is shared. Nothing
   else in the app's storage is exposed through this provider.
 
-  All three are needed, because a report can land in any of them:
-    - cache-path          share() / shareAsync(), which default to cacheDir
-    - external-files-path LatencyNotification's default, chosen because it is
-                          reachable over `adb pull` without a permission
+  Both roots describe the same path, `files/report`, in the two places it can
+  physically be:
+    - external-files-path  where reports always go
+    - files-path           the fallback when the device has no external volume
 
-  There is deliberately no files-path: when external storage is unavailable
-  LatencyNotification falls back to cacheDir, which is already covered here,
-  rather than to filesDir, which would need a third root.
-
-  Leaving a root out does not fail at write time — it fails later, when the
-  file is handed to another app and FileProvider cannot map it back.
+  Declaring a root is not optional bookkeeping. A report written outside every
+  declared root writes perfectly well and only fails later, when it is handed
+  to another app and FileProvider cannot map it back to a content:// URI.
 -->
 <paths>
-    <cache-path name="latencyscope_reports" path="latencyscope/" />
-    <external-files-path name="latencyscope_external" path="latencyscope/" />
+    <external-files-path name="latencyscope_reports" path="report/" />
+    <files-path name="latencyscope_reports_internal" path="report/" />
 </paths>

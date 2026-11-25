@@ -793,6 +793,33 @@ got the convention plugin's toolchain, and the first Robolectric test there
 failed with *"Unsupported class file major version 69"* — the exact problem
 the plugin's pin exists to prevent.
 
+### One report location
+
+Reports were being written to two different places: the notification wrote to
+external files under `latencyscope/<8-char session id>`, while `writeAll`,
+`share()` and `shareAsync()` defaulted to `cacheDir/latencyscope/<full id>`.
+Two answers to "where is my report", decided by which button produced it.
+
+Now there is one, and it is the one a person can actually reach:
+
+```
+Android/data/<app>/files/report/<session name>/
+```
+
+| Decision | Why |
+|---|---|
+| External app storage | Reachable with `adb pull`, over USB and from the Files app, with no permission, and removed on uninstall. `cacheDir` is invisible from a desktop and the system may delete it at any moment — the wrong promise for a file about to be attached to a ticket |
+| Folder named after the **session**, not its id | `report/checkout/` means something to a person; `report/a1b2c3d4/` does not |
+| Same-named sessions share a folder | Every filename already carries the session's start time, so recording "checkout" twice leaves both runs side by side instead of overwriting. A test pins this |
+| Session name is slugged | It is user input and must never steer a path. The existing `slug()` already handled this for filenames |
+| Internal `filesDir` fallback | Only when the device has no external volume at all. Silently writing nothing would be worse, and both roots are declared in the FileProvider so a report can be opened and shared from wherever it landed |
+
+`cache-path` was removed from the provider's paths file, since nothing writes
+there any more, and `external-files-path`/`files-path` now point at `report/`.
+A root that does not cover where files are written fails *late* — the write
+succeeds and only handing the file to another app throws — so the paths file
+and the writers have to move together.
+
 ### Phase 10 — Docs & release
 - `README.md`: what/why, 30-second quickstart per stack, screenshots of HTML
   report, config table, overhead numbers, limitations table per stack.

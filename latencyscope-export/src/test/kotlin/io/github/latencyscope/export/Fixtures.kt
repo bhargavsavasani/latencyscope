@@ -59,11 +59,12 @@ internal fun session(
     markers: List<Marker> = emptyList(),
     droppedCount: Long = 0,
     durationMs: Long = 5_000,
+    startedAtEpochMs: Long = 1_700_000_000_000,
 ): LatencySession = LatencySession(
     id = "11111111-2222-3333-4444-555555555555",
     name = name,
-    startedAtEpochMs = 1_700_000_000_000,
-    endedAtEpochMs = 1_700_000_000_000 + durationMs,
+    startedAtEpochMs = startedAtEpochMs,
+    endedAtEpochMs = startedAtEpochMs + durationMs,
     durationMs = durationMs,
     device = DeviceInfo(
         manufacturer = "Google",
@@ -85,8 +86,15 @@ internal fun report(
     name: String = "checkout flow",
     markers: List<Marker> = emptyList(),
     droppedCount: Long = 0,
+    startedAtEpochMs: Long = 1_700_000_000_000,
 ): LatencyReport = Aggregator.aggregate(
-    session = session(name = name, records = records, markers = markers, droppedCount = droppedCount),
+    session = session(
+        name = name,
+        records = records,
+        markers = markers,
+        droppedCount = droppedCount,
+        startedAtEpochMs = startedAtEpochMs,
+    ),
     warnThresholdMs = 300,
     slowThresholdMs = 1_000,
     generatedAtEpochMs = 1_700_000_005_000,

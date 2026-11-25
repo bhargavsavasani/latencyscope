@@ -45,11 +45,9 @@ class LatencyNotificationTest {
 
     @Before
     fun setUp() {
-        // cacheDir, not the production default of external files: Robolectric
-        // does not populate getExternalFilesDirs(), so FileProvider can map
-        // nothing there and the open/share intents could not be asserted.
-        // Both are declared roots in latencyscope_file_paths.xml.
-        directory = File(application.cacheDir, "latencyscope")
+        // The real production location, so these tests cover the path a
+        // device actually writes to rather than a stand-in.
+        directory = LatencyExport.reportsRoot(application)
         directory.deleteRecursively()
         clearFileProviderCache()
         LatencyScope.reset()

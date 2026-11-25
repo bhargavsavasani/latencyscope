@@ -85,6 +85,10 @@ public object LatencyExport {
         context.packageName + ".latencyscope.fileprovider"
 
     @JvmStatic
+    public fun reportsRoot(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "report")
+
+    @JvmStatic
     public fun defaultDirectory(context: Context, report: LatencyReport): File =
         File(File(context.cacheDir, "latencyscope"), report.session.id)
 }

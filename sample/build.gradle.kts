@@ -181,7 +181,7 @@ tasks.register<Exec>("pullLatencyReports") {
     // so the task stays configuration-cache safe.
     val applicationId = requireNotNull(android.defaultConfig.applicationId)
     val target = rootProject.layout.projectDirectory.dir("reports").asFile
-    val remote = "/sdcard/Android/data/$applicationId/files/latencyscope"
+    val remote = "/sdcard/Android/data/$applicationId/files/report"
 
     // A missing directory means "nothing recorded yet", which is an ordinary
     // state and not a build failure.

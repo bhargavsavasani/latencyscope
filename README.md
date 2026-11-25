@@ -249,9 +249,33 @@ which case you are in.
 
 ### Where the files go
 
-`Android/data/<your app>/files/latencyscope/<session>/` — no permission
-needed, readable over `adb`, and the ten most recent sessions are kept. To
-pull them into your project:
+One location, always:
+
+```
+/storage/emulated/0/Android/data/<your.package.name>/files/report/<session name>/
+    latency-<session>-20261125-143022.html
+    latency-<session>-20261125-143022-summary.csv
+    latency-<session>-20261125-143022-calls.csv
+    latency-<session>-20261125-143022.json
+```
+
+External app storage, so you can reach a report with `adb pull`, over USB, or
+from the device's Files app — with **no permission**, and it is removed when
+the app is uninstalled. Internal cache would be none of those things:
+invisible from a desktop, and the system may delete it at any moment, which is
+the wrong promise for a file you are about to attach to a ticket.
+
+The folder is named after the session. Recording `"checkout"` twice puts both
+runs in `report/checkout/` rather than overwriting the first, because every
+filename already carries the time the session started. The ten most recent
+session folders are kept.
+
+This is the only place LatencyScope writes. `LatencyExport.writeAll`,
+`share()`, `shareAsync()` and the notification's **Stop & report** all land
+here, so "where is my report" has one answer. `LatencyExport.reportsRoot(context)`
+returns the directory if you want it in code.
+
+To pull them into your project:
 
 ```bash
 ./gradlew :sample:pullLatencyReports     # → <repo>/reports/

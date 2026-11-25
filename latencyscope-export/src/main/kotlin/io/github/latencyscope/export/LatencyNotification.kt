@@ -14,6 +14,7 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import io.github.latencyscope.core.LatencyReport
 import io.github.latencyscope.core.LatencyScope
 import io.github.latencyscope.core.LatencySession
 import java.io.File
@@ -289,7 +290,7 @@ public object LatencyNotification {
                 val outcome = runCatching {
                     val report = LatencyScope.report(session)
                         ?: error("session had no report")
-                    LatencyExport.writeAll(application, report, directoryFor(session))
+                    LatencyExport.writeAll(application, report, directoryFor(report))
                 }
                 main.post {
                     manager.cancel(RECORDING_ID)
@@ -303,19 +304,17 @@ public object LatencyNotification {
             }
         }
 
-        private fun directoryFor(session: LatencySession): File {
-            // External files first: reachable over `adb pull` and in the Files
-            // app without any permission. The fallback is cacheDir rather than
-            // filesDir because both of those are roots the bundled
-            // FileProvider can map — a report it cannot map writes fine and
-            // then fails when something tries to open or share it.
-            val root = config.directory
-                ?: File(
-                    application.getExternalFilesDir(null) ?: application.cacheDir,
-                    "latencyscope",
-                )
+        /**
+         * One place, shared with [LatencyExport.writeAll].
+         *
+         * These used to be two different defaults — the notification wrote
+         * somewhere the plain writers did not — which meant "where is my
+         * report" had two answers depending on which button produced it.
+         */
+        private fun directoryFor(report: LatencyReport): File {
+            val root = config.directory ?: LatencyExport.reportsRoot(application)
             prune(root, config.keepLastSessions)
-            return File(root, session.id.take(SESSION_DIR_ID_LENGTH))
+            return File(root, LatencyExport.sessionFolderName(report))
         }
 
         private fun showReady(files: ExportedFiles) {
@@ -444,7 +443,6 @@ public object LatencyNotification {
         }
     }
 
-    private const val SESSION_DIR_ID_LENGTH = 8
 }
 
 /** Appearance and behaviour of the recording notification. */
@@ -470,7 +468,7 @@ public data class NotificationConfig(
     public val shareChooserTitle: String = "Share latency report",
     /** How often the elapsed time and call count are refreshed. */
     public val refreshIntervalMs: Long = 1_000,
-    /** Where session folders go. Null means the app's external files dir. */
+    /** Where session folders go. Null means [LatencyExport.reportsRoot]. */
     public val directory: File? = null,
     /** Session folders kept before the oldest are deleted. */
     public val keepLastSessions: Int = 10,
